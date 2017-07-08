@@ -2,11 +2,15 @@
 import logging
 import os
 import sys
+import random
 
 import zmq
 import zmq.auth
 from zmq.auth.thread import ThreadAuthenticator
 import time
+import uuid
+
+import json
 
 
 def client():
@@ -28,12 +32,21 @@ def client():
     client.curve_serverkey = server_public
     client.connect('tcp://127.0.0.1:9001')
 
+    my_id = str(uuid.uuid4()).encode('utf-8')
+    my_port = str(random.randint(2000,2020)).encode('utf-8')
     while True:
-        client.send(b"Hello!")
+        client.send_multipart([b"PUBLISH", my_id, my_port])
         if not client.poll(2000):
             break
         msg = client.recv()
         print(msg)
+        client.send_multipart([b"PEERS"])
+        if not client.poll(2000):
+            break
+        peers = json.loads(client.recv().decode('utf-8'))
+
+        for U, ep in peers:
+            print("-", U, ep)
         time.sleep(1)
     print("Exit?")
     sys.exit(0)

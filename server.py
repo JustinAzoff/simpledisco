@@ -3,17 +3,34 @@
 import logging
 import os
 import sys
+from collections import namedtuple
+import time
+import json
 
 import zmq
 import zmq.auth
 from zmq.auth.thread import ThreadAuthenticator
 from zmq.auth.certs import load_certificates
 
-import time
 
-def curve_user_id(key):
-    print ("Key is", key)
-    return key
+Peer = namedtuple("Peer", "uuid endpoint last_seen")
+PEER_TIMEOUT = 10
+
+def clean(data):
+    new_data = {}
+    now = time.time()
+    for peer in data.values():
+        if now - peer.last_seen < PEER_TIMEOUT:
+            new_data[peer.uuid] = peer
+    return new_data
+
+def dump_data(data):
+    now = time.time()
+    print()
+    print("Peer list:")
+    for uuid, peer in data.items():
+        print("-",peer, "age is {:.2f}".format(now - peer.last_seen))
+    print()
 
 def server():
     ctx = zmq.Context.instance()
@@ -23,7 +40,6 @@ def server():
     auth.allow('127.0.0.1')
     # Tell authenticator to use the certificate in a directory
     auth.configure_curve(domain='*', location='public_keys')
-    #auth.curve_user_id = curve_user_id
 
     server = ctx.socket(zmq.XREP)
 
@@ -33,6 +49,9 @@ def server():
     server.curve_publickey = server_public
     server.curve_server = True  # must come before bind
     server.bind('tcp://*:9001')
+
+
+    data = {}
 
     while True:
         #Does not auto reload like zcertstore
@@ -44,14 +63,30 @@ def server():
             md[k] = raw[-1].get(k)
         print ("Meta is", md)
 
-        m = [x.bytes for x in raw]
-        ident, _, msg = m
-        response = [ident, b'', msg.upper()]
-
         if md['User-Id'] not in trusted_keys:
             print (md["User-Id"], "does not exist, ignoring")
             continue
 
+
+        m = [x.bytes for x in raw]
+        print("Received", m)
+
+        ident, _, func, *args = m
+
+        if func == b'PUBLISH':
+            uuid, port = args
+            endpoint = "tcp://{}:{}".format(md['Peer-Address'], port)
+            data[uuid] = Peer(uuid.decode('utf-8'), endpoint, time.time())
+            resp = b'OK'
+
+        data = clean(data)
+        dump_data(data)
+
+        if func == b'PEERS':
+            peers = [(p.uuid, p.endpoint) for p in data.values()]
+            resp = json.dumps(peers).encode('utf-8')
+
+        response = [ident, b'', resp]
         server.send_multipart(response)
 
 if __name__ == "__main__":
