@@ -13,7 +13,8 @@ import uuid
 import json
 
 
-def client():
+def client(my_id, my_port):
+    print("Client starting...")
     ctx = zmq.Context.instance()
 
     client = ctx.socket(zmq.REQ)
@@ -32,24 +33,20 @@ def client():
     client.curve_serverkey = server_public
     client.connect('tcp://127.0.0.1:9001')
 
-    my_id = str(uuid.uuid4()).encode('utf-8')
-    my_port = str(random.randint(2000,2020)).encode('utf-8')
     while True:
         client.send_multipart([b"PUBLISH", my_id, my_port])
         if not client.poll(2000):
-            break
+            return
         msg = client.recv()
         print(msg)
         client.send_multipart([b"PEERS"])
         if not client.poll(2000):
-            break
+            return
         peers = json.loads(client.recv().decode('utf-8'))
 
         for U, ep in peers:
             print("-", U, ep)
-        time.sleep(1)
-    print("Exit?")
-    sys.exit(0)
+        time.sleep(2)
 
 if __name__ == '__main__':
     if zmq.zmq_version_info() < (4,0):
@@ -62,4 +59,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=level, format="[%(levelname)s] %(message)s")
 
-    client()
+    my_id = str(uuid.uuid4()).encode('utf-8')
+    my_port = str(random.randint(2000,2020)).encode('utf-8')
+    while True:
+        client(my_id, my_port)
