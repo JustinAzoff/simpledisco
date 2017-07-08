@@ -12,11 +12,7 @@ import uuid
 
 import json
 
-
-def client(my_id, my_port):
-    print("Client starting...")
-    ctx = zmq.Context.instance()
-
+def make_client(ctx, endpoint):
     client = ctx.socket(zmq.REQ)
 
     # We need two certificates, one for the client and one for
@@ -31,21 +27,43 @@ def client(my_id, my_port):
     server_public, _ = zmq.auth.load_certificate(server_public_file)
     # The client must know the server's public key to make a CURVE connection.
     client.curve_serverkey = server_public
-    client.connect('tcp://127.0.0.1:9001')
+    client.connect(endpoint)
+    
+    return client
+
+def client(server_endpoints, my_id, my_port):
+    print("Client starting...")
+    ctx = zmq.Context.instance()
+
+    clients = {srv: make_client(ctx, srv) for srv in server_endpoints}
 
     while True:
-        client.send_multipart([b"PUBLISH", my_id, my_port])
-        if not client.poll(2000):
-            return
-        msg = client.recv()
-        print(msg)
-        client.send_multipart([b"PEERS"])
-        if not client.poll(2000):
-            return
-        peers = json.loads(client.recv().decode('utf-8'))
+        all_peers = {}
+        for srv, client in clients.items():
+            client.send_multipart([b"PUBLISH", my_id, my_port])
+            if not client.poll(2000):
+                print("DEAD:", srv)
+                clients[srv] = make_client(ctx, srv)
+                continue
+            msg = client.recv()
+            print(msg)
+            client.send_multipart([b"PEERS"])
+            if not client.poll(2000):
+                print("DEAD:", srv)
+                clients[srv] = make_client(ctx, srv)
+                continue
+            peers = json.loads(client.recv().decode('utf-8'))
 
-        for U, ep in peers:
-            print("-", U, ep)
+            for U, val in peers:
+                print("-", srv, U, val)
+                all_peers[U] = val
+            print()
+            
+        print("All peers:")
+        for u, val in all_peers.items():
+            print("-", u, val)
+        print()
+
         time.sleep(2)
 
 if __name__ == '__main__':
@@ -59,7 +77,9 @@ if __name__ == '__main__':
 
     logging.basicConfig(level=level, format="[%(levelname)s] %(message)s")
 
+    servers = sys.argv[1:]
+
     my_id = str(uuid.uuid4()).encode('utf-8')
     my_port = str(random.randint(2000,2020)).encode('utf-8')
     while True:
-        client(my_id, my_port)
+        client(servers, my_id, my_port)

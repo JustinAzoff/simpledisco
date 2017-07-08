@@ -32,7 +32,7 @@ def dump_data(data):
         print("-",peer, "age is {:.2f}".format(now - peer.last_seen))
     print()
 
-def server():
+def server(bind):
     ctx = zmq.Context.instance()
     # Start an authenticator for this context.
     auth = ThreadAuthenticator(ctx)
@@ -48,7 +48,7 @@ def server():
     server.curve_secretkey = server_secret
     server.curve_publickey = server_public
     server.curve_server = True  # must come before bind
-    server.bind('tcp://*:9001')
+    server.bind(bind)
 
 
     data = {}
@@ -103,6 +103,8 @@ if __name__ == "__main__":
     else:
         level = logging.INFO
 
+    bind = sys.argv[1]
+
     logging.basicConfig(level=level, format="[%(levelname)s] %(message)s")
 
-    server()
+    server(bind)
