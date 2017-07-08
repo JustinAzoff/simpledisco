@@ -54,8 +54,9 @@ def client(server_endpoints, my_id, my_port):
                 continue
             peers = json.loads(client.recv().decode('utf-8'))
 
+            print("peers from", srv)
             for U, val in peers:
-                print("-", srv, U, val)
+                print("-", U, val)
                 all_peers[U] = val
             print()
             
