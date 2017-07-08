@@ -61,7 +61,7 @@ def server():
         md = {}
         for k in 'User-Id', 'Identity', 'Peer-Address':
             md[k] = raw[-1].get(k)
-        print ("Meta is", md)
+        #print ("Meta is", md)
 
         if md['User-Id'] not in trusted_keys:
             print (md["User-Id"], "does not exist, ignoring")
@@ -69,18 +69,18 @@ def server():
 
 
         m = [x.bytes for x in raw]
-        print("Received", m)
-
         ident, _, func, *args = m
+
+        print("Received", func, args)
 
         if func == b'PUBLISH':
             uuid, port = args
+            uuid = uuid.decode('utf-8')
             endpoint = "tcp://{}:{}".format(md['Peer-Address'], port)
-            data[uuid] = Peer(uuid.decode('utf-8'), endpoint, time.time())
+            peer = Peer(uuid, endpoint, time.time())
+            data[uuid] = peer
+            #print("Set", uuid, "to", peer)
             resp = b'OK'
-
-        data = clean(data)
-        dump_data(data)
 
         if func == b'PEERS':
             peers = [(p.uuid, p.endpoint) for p in data.values()]
@@ -88,6 +88,11 @@ def server():
 
         response = [ident, b'', resp]
         server.send_multipart(response)
+
+        #cleanup
+        dump_data(data)
+        data = clean(data)
+
 
 if __name__ == "__main__":
     if zmq.zmq_version_info() < (4,0):
