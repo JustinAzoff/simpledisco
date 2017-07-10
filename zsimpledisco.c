@@ -23,6 +23,34 @@ typedef struct {
     int64_t ts;
 } value_t;
 
+
+//Helpers
+
+static int
+zsimpledisco_dump_hash(zhash_t *h)
+{
+    value_t *val;
+    int64_t now = zclock_mono();
+    for (val = zhash_first (h); val != NULL; val = zhash_next (h)) {
+        const char *key = zhash_cursor (h);
+        zsys_debug("zsimpledisco: key='%s' value='%s' ts='%ld' age='%ld'", key, val->value, val->ts, (now-val->ts) / 1000);
+    }
+    return 0;
+}
+zhash_t *
+convert_hash(zhash_t *h)
+{
+    zhash_t *kv = zhash_new();
+    value_t *val;
+    int64_t now = zclock_mono();
+    for (val = zhash_first (h); val != NULL; val = zhash_next (h)) {
+        const char *key = zhash_cursor (h);
+        zsys_debug("zsimpledisco: Creating new hash with just %s=%s", key, val->value);
+        zhash_update(kv, key, val->value);
+    }
+    return kv;
+}
+
 static void
 s_self_destroy (self_t **self_p)
 {
@@ -78,9 +106,24 @@ zstr_recv_with_timeout(zsock_t *sock, int timeout)
     zpoller_add (poller, sock);
     zpoller_wait (poller, 1000);
     if(zpoller_expired(poller)) {
+        zpoller_destroy(&poller);
         return NULL;
     }
+    zpoller_destroy(&poller);
     return zstr_recv(sock);
+}
+zframe_t *
+zframe_recv_with_timeout(zsock_t *sock, int timeout)
+{
+    zpoller_t *poller = zpoller_new (NULL);
+    zpoller_add (poller, sock);
+    zpoller_wait (poller, 1000);
+    if(zpoller_expired(poller)) {
+        zpoller_destroy(&poller);
+        return NULL;
+    }
+    zpoller_destroy(&poller);
+    return zframe_recv(sock);
 }
 
 static int
@@ -94,7 +137,7 @@ s_self_client_publish(self_t *self, char *key, char *value)
             perror("zsimpledisco: send failed?");
         }
         //TODO: this should do scatter/gather kind of thing
-        char *response = zstr_recv_with_timeout(sock, 1000);
+        char *response = zstr_recv_with_timeout(sock, 2000);
         if(response) {
             zsys_debug("zsimpledisco: Got response from %s: %s", endpoint, response);
             zstr_free(&response);
@@ -136,6 +179,44 @@ s_self_client_publish_all(self_t *self)
     }
     return 0;
 
+}
+
+static void
+zsimpledisco_merge_hash(zhash_t *dest, zhash_t *src)
+{
+    void *val;
+    for (val = zhash_first (src); val != NULL; val = zhash_next (src)) {
+        const char *key = zhash_cursor (src);
+        zsys_debug("zsimpledisco: Adding %s to new merged hash", key);
+        zhash_update (dest, key, val);
+    }
+}
+
+static int
+s_self_client_get_values(self_t *self, zhash_t *merged)
+{
+    zsock_t *sock;
+    for (sock = zhash_first (self->client_sockets); sock != NULL; sock = zhash_next (self->client_sockets)) {
+        const char *endpoint = zhash_cursor (self->client_sockets);
+        zsys_debug("zsimpledisco: Send %s => 'VALUES'", endpoint);
+        if(-1 == zstr_send(sock, "VALUES")) {
+            perror("zsimpledisco: send failed?");
+        }
+        //TODO: this should do scatter/gather kind of thing
+        zframe_t *data = zframe_recv_with_timeout(sock, 2000);
+        if(data) {
+            zhash_t *h = zhash_unpack(data);
+            zsys_debug("zsimpledisco: Got response from %s", endpoint);
+            zsimpledisco_merge_hash(merged, h);
+            //zhash_destroy(&h); FIXME: breaks things
+            zframe_destroy(&data);
+        } else {
+            zsys_debug("zsimpledisco: no response from %s", endpoint);
+            zsock_destroy(&sock);
+            s_self_connect(self, endpoint);
+        }
+    }
+    return 0;
 }
 
 
@@ -182,23 +263,13 @@ s_self_handle_server_socket (self_t *self)
     if (streq (command, "VALUES")) {
         zsys_info ("zsimpledisco: handle VALUES");
         zframe_send (&routing_id, self->server_socket, ZFRAME_MORE + ZFRAME_REUSE);
-        zframe_t *all_data =  zhash_pack (self->data);
+        zhash_t *kvhash = convert_hash(self->data);
+        zframe_t *all_data =  zhash_pack (kvhash);
         zframe_send (&all_data, self->server_socket, 0);
+        zhash_destroy(&kvhash);
     }
     zstr_free (&command);
     return 0;
-}
-
-static void
-dump_hash(zhash_t *h)
-{
-    void *item;
-    int64_t now = zclock_mono();
-    for (item = zhash_first (h); item != NULL; item = zhash_next (h)) {
-        const char *key = zhash_cursor (h);
-        value_t *val = item;
-        zsys_debug("zsimpledisco: key='%s' value='%s' ts='%ld' age='%ld'", key, val->value, val->ts, (now-val->ts) / 1000);
-    }
 }
 
 static int
@@ -230,9 +301,7 @@ s_self_handle_expire_data(self_t *self)
 static int
 s_self_handle_cleanup(self_t *self)
 {
-    zsys_debug("zsimpledisco: Cleanup");
-    
-    dump_hash(self->data);
+    zsimpledisco_dump_hash(self->data);
     s_self_handle_expire_data(self);
 
     return 0;
@@ -272,6 +341,14 @@ s_self_handle_pipe (self_t *self)
         char *value = zstr_recv(self->pipe);
         zhash_update (self->client_data, key, value);
         s_self_client_publish(self, key, value);
+    }
+    else
+    if (streq (command, "VALUES")) {
+        zhash_t *h = zhash_new();
+        s_self_client_get_values(self, h);
+        zframe_t *all_data =  zhash_pack (h);
+        zframe_send (&all_data, self->pipe, 0);
+        zhash_destroy(&h);
     }
     else
     if (streq (command, "$TERM"))
