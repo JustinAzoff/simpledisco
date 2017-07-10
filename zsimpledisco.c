@@ -45,7 +45,7 @@ convert_hash(zhash_t *h)
     int64_t now = zclock_mono();
     for (val = zhash_first (h); val != NULL; val = zhash_next (h)) {
         const char *key = zhash_cursor (h);
-        zsys_debug("zsimpledisco: Creating new hash with just %s=%s", key, val->value);
+        //zsys_debug("zsimpledisco: Creating new hash with just %s=%s", key, val->value);
         zhash_update(kv, key, val->value);
     }
     return kv;
@@ -236,7 +236,7 @@ static int
 s_self_handle_server_socket (self_t *self)
 {
     zframe_t *routing_id = zframe_recv (self->server_socket);
-    zframe_print(routing_id, "zsimpledisco: frame");
+    //zframe_print(routing_id, "zsimpledisco: frame");
     const char *peer_address = zframe_meta(routing_id, "Peer-Address");
     if(peer_address) {
         zsys_debug("zsimpledisco: Peer Address is %s", peer_address);
@@ -261,7 +261,6 @@ s_self_handle_server_socket (self_t *self)
     }
     else
     if (streq (command, "VALUES")) {
-        zsys_info ("zsimpledisco: handle VALUES");
         zframe_send (&routing_id, self->server_socket, ZFRAME_MORE + ZFRAME_REUSE);
         zhash_t *kvhash = convert_hash(self->data);
         zframe_t *all_data =  zhash_pack (kvhash);
@@ -301,7 +300,7 @@ s_self_handle_expire_data(self_t *self)
 static int
 s_self_handle_cleanup(self_t *self)
 {
-    zsimpledisco_dump_hash(self->data);
+    //zsimpledisco_dump_hash(self->data);
     s_self_handle_expire_data(self);
 
     return 0;
