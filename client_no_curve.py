@@ -54,7 +54,9 @@ def client(server_endpoints, my_id, my_port):
                 print("DEAD:", srv)
                 clients[srv] = make_client(ctx, srv)
                 continue
-            peers = json.loads(client.recv().decode('utf-8'))
+            #peers = json.loads(client.recv().decode('utf-8'))
+            print(client.recv())
+            continue
 
             print("peers from", srv)
             for U, val in peers:
@@ -67,7 +69,7 @@ def client(server_endpoints, my_id, my_port):
             print("-", u, val)
         print()
 
-        time.sleep(2)
+        time.sleep(4)
 
 if __name__ == '__main__':
     if zmq.zmq_version_info() < (4,0):

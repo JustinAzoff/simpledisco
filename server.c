@@ -7,6 +7,6 @@ int main(int argn, char *argv[])
     assert (server1);
     zstr_send (server1, "VERBOSE");
     zstr_sendx (server1, "BIND", "tcp://*:9101", NULL);
-    zclock_sleep (8000);
+    zclock_sleep (60000);
     zactor_destroy(&server1);
 }
