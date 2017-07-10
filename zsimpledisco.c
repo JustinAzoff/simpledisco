@@ -75,9 +75,9 @@ s_self_new (zsock_t *pipe)
     self->pipe = pipe;
 
     self->server_socket = zsock_new (ZMQ_ROUTER);
-    self->cleanup_interval = 1;
-    self->cleanup_max_age = 10;
-    self->send_interval = self->cleanup_max_age - 2;
+    self->cleanup_interval = 5;
+    self->cleanup_max_age = 60;
+    self->send_interval = self->cleanup_max_age - 2 * self->cleanup_interval;
 
     self->data = zhash_new();
     self->client_data = zhash_new();
