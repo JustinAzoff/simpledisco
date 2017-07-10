@@ -65,7 +65,7 @@ static int
 s_self_connect(self_t *self, char *endpoint)
 {
     zsys_debug("zsimpledisco: Client wants to connect to %s", endpoint);
-    zsock_t * sock =  zsock_new (ZMQ_REQ);
+    zsock_t * sock =  zsock_new (ZMQ_DEALER);
     zsock_connect(sock, "%s", endpoint);
     zhash_update (self->client_sockets, endpoint, sock);
     return 0;
@@ -77,7 +77,10 @@ s_self_client_publish(self_t *self, char *key, char *value)
     for (sock = zhash_first (self->client_sockets); sock != NULL; sock = zhash_next (self->client_sockets)) {
         const char *endpoint = zhash_cursor (self->client_sockets);
         zsys_debug("zsimpledisco: Send %s => '%s' '%s'", endpoint, key, value);
-        zstr_sendx(sock, "PUBLISH", key, value, NULL);
+        //BROKEN???
+        if(-1 == zstr_sendx(sock, "PUBLISH", key, value, NULL)) {
+            perror("zsimpledisco: send failed?");
+        }
         char *response = zstr_recv(sock);
         zsys_debug("zsimpledisco: Got response %s", response);
     }
@@ -93,8 +96,13 @@ s_self_client_publish_all(self_t *self)
         const char *endpoint = zhash_cursor (self->client_sockets);
         for (value = zhash_first (self->client_data); value != NULL; value = zhash_next (self->client_data)) {
             const char *key = zhash_cursor (self->client_data);
-            zsys_debug("zsimpledisco: Send  %s => '%s' '%s'", endpoint, key, value);
-            zstr_sendx(sock, "PUBLISH", key, value, NULL);
+            zsys_debug("zsimpledisco: Send %s => '%s' '%s'", endpoint, key, value);
+            //BROKEN???
+            if(-1 == zstr_sendx(sock, "PUBLISH", key, value, NULL)) {
+                perror("zsimpledisco: send failed?");
+            }
+            char *response = zstr_recv(sock);
+            zsys_debug("zsimpledisco: Got response %s", response);
         }
     }
     return 0;
@@ -136,7 +144,10 @@ s_self_handle_server_socket (self_t *self)
         zstr_free (&key);
         //zstr_free (&value); //NOT NEEDED when stored in zhash?
         zframe_send (&routing_id, self->server_socket, ZFRAME_MORE + ZFRAME_REUSE);
-        zstr_send(self->server_socket, "OK");
+        if(-1 == zstr_send(self->server_socket, "OK")) {
+            perror("sending OK failed?");
+        }
+        zsys_debug("zsimpledisco: responded with OK!");
     }
     else
     if (streq (command, "VALUES")) {
