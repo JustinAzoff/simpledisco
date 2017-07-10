@@ -160,7 +160,6 @@ s_self_client_publish_all(self_t *self)
         for (value = zhash_first (self->client_data); value != NULL; value = zhash_next (self->client_data)) {
             const char *key = zhash_cursor (self->client_data);
             zsys_debug("zsimpledisco: Send %s => '%s' '%s'", endpoint, key, value);
-            //BROKEN???
             if(-1 == zstr_sendx(sock, "PUBLISH", key, value, NULL)) {
                 perror("zsimpledisco: send failed?");
             }
@@ -257,7 +256,6 @@ s_self_handle_server_socket (self_t *self)
         if(-1 == zstr_send(self->server_socket, "OK")) {
             perror("sending OK failed?");
         }
-        zsys_debug("zsimpledisco: responded with OK!");
     }
     else
     if (streq (command, "VALUES")) {
