@@ -132,7 +132,7 @@ s_self_client_publish(self_t *self, char *key, char *value)
     zsock_t *sock;
     for (sock = zhash_first (self->client_sockets); sock != NULL; sock = zhash_next (self->client_sockets)) {
         const char *endpoint = zhash_cursor (self->client_sockets);
-        zsys_debug("zsimpledisco: Send %s => '%s' '%s'", endpoint, key, value);
+        zsys_debug("zsimpledisco: PUBLISH %s => '%s' '%s'", endpoint, key, value);
         if(-1 == zstr_sendx(sock, "PUBLISH", key, value, NULL)) {
             perror("zsimpledisco: send failed?");
         }
@@ -159,7 +159,7 @@ s_self_client_publish_all(self_t *self)
         const char *endpoint = zhash_cursor (self->client_sockets);
         for (value = zhash_first (self->client_data); value != NULL; value = zhash_next (self->client_data)) {
             const char *key = zhash_cursor (self->client_data);
-            zsys_debug("zsimpledisco: Send %s => '%s' '%s'", endpoint, key, value);
+            zsys_debug("zsimpledisco: PUBLISH %s => '%s' '%s'", endpoint, key, value);
             if(-1 == zstr_sendx(sock, "PUBLISH", key, value, NULL)) {
                 perror("zsimpledisco: send failed?");
             }
