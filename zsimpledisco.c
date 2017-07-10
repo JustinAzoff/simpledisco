@@ -60,8 +60,42 @@ s_self_handle_pipe (self_t *self)
     if (streq (command, "$TERM"))
         self->terminated = true;
     else {
-        zsys_error ("zbeacon: - invalid command: %s", command);
+        zsys_error ("zsimpledisco: - invalid command: %s", command);
         assert (false);
+    }
+    zstr_free (&command);
+    return 0;
+}
+
+static int
+s_self_handle_server_socket (self_t *self)
+{
+    zframe_t *routing_id = zframe_recv (self->server_socket);
+    zframe_print(routing_id, "zsimpledisco: frame");
+    const char *peer_address = zframe_meta(routing_id, "Peer-Address");
+    if(peer_address) {
+        zsys_debug("zsimpledisco: Peer Address is %s", peer_address);
+        //zstr_free(&peer_address); //FIXME: CRASHES
+    }
+    char *command = zstr_recv(self->server_socket);
+
+    if (self->verbose)
+        zsys_info ("zsimpledisco: server command=%s", command);
+    if (streq (command, "PUBLISH")) {
+        char *key = zstr_recv(self->server_socket);
+        char *value = zstr_recv(self->server_socket);
+        zsys_info ("zsimpledisco: server PUBLISH '%s' '%s'", key, value);
+        zstr_free (&key);
+        zstr_free (&value);
+        zsys_debug("zsimpledisco: server activity!");
+        zframe_send (&routing_id, self->server_socket, ZFRAME_MORE + ZFRAME_REUSE);
+        zstr_send(self->server_socket, "OK");
+    }
+    else
+    if (streq (command, "VALUES")) {
+        zsys_info ("zsimpledisco: handle VALUES");
+        zframe_send (&routing_id, self->server_socket, ZFRAME_MORE + ZFRAME_REUSE);
+        zstr_send(self->server_socket, "[]");
     }
     zstr_free (&command);
     return 0;
@@ -77,12 +111,19 @@ zsimpledisco (zsock_t *pipe, void *args)
     zsock_signal (pipe, 0);
 
     zpoller_t *poller = zpoller_new (NULL);
-    zpoller_add (poller, zsock_resolve(self->pipe));
+    zpoller_add (poller, self->pipe);
+    zpoller_add (poller, self->server_socket);
 
     while (!self->terminated) {
         zsock_t *which = (zsock_t *) zpoller_wait (poller, 1000);
-        if(which == zsock_resolve(self->pipe))
+        if(which == self->pipe) {
             s_self_handle_pipe (self);
+            zpoller_add (poller, self->server_socket);
+        }
+        if(which == self->server_socket) {
+            s_self_handle_server_socket(self);
+        }
+
         zsys_debug ("zsimpledisco: Idle");
     }
     s_self_destroy(&self);
