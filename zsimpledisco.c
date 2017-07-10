@@ -16,7 +16,9 @@ typedef struct {
     zsock_t *server_socket;     //  Socket for talking to clients
     int64_t last_cleanup;       //  Time records were last cleaned up
     int64_t last_send;          //  Time records were last sent
+    int64_t last_deliver;       //  Time records were last delivered out of the actor
     int send_interval;          //  Interval to re-send data to the server
+    int deliver_inteval;        //  Interval to deliver data
     int cleanup_interval;       //  Cleanup interval in seconds
     int cleanup_max_age;        //  Cleanup records older than this many seconds
     zhash_t *data;              //  key/value data, on the server
@@ -75,6 +77,27 @@ zsimpledisco_verbose(zsimpledisco_t *self)
 {
 	zstr_sendx (self->actor, "VERBOSE", NULL);
 }
+void
+zsimpledisco_publish(zsimpledisco_t *self, const char *key, const char *value)
+{
+	zstr_sendx (self->actor, "PUBLISH", key, value, NULL);
+}
+void
+zsimpledisco_get_values(zsimpledisco_t *self)
+{
+	zstr_sendx (self->actor, "GET VALUES", NULL);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Return node zsock_t socket, for direct polling of socket
+
+zsock_t *
+zsimpledisco_socket (zsimpledisco_t *self)
+{
+    assert (self);
+    return self->inbox;
+}
 
 //Helpers
 
@@ -127,6 +150,7 @@ s_self_new (zsock_t *pipe)
     self->pipe = pipe;
 
     self->server_socket = zsock_new (ZMQ_ROUTER);
+    self->deliver_inteval = 30;
     self->cleanup_interval = 5;
     self->cleanup_max_age = 60;
     self->send_interval = self->cleanup_max_age - 2 * self->cleanup_interval;
@@ -392,12 +416,8 @@ s_self_handle_pipe (self_t *self)
         s_self_client_publish(self, key, value);
     }
     else
-    if (streq (command, "VALUES")) {
-        zhash_t *h = zhash_new();
-        s_self_client_get_values(self, h);
-        zframe_t *all_data =  zhash_pack (h);
-        zframe_send (&all_data, self->pipe, 0);
-        zhash_destroy(&h);
+    if (streq (command, "GET VALUES")) {
+        self->last_deliver = 0;
     }
     else
     if (streq (command, "$TERM"))
@@ -411,12 +431,29 @@ s_self_handle_pipe (self_t *self)
 }
 
 void
+s_self_deliver_all (self_t *self)
+{
+    zhash_t *h = zhash_new();
+    s_self_client_get_values(self, h);
+    char *val;
+    for (val = zhash_first (h); val != NULL; val = zhash_next (h)) {
+        const char *key = zhash_cursor (h);
+        //zsys_debug("zsimpledisco: key='%s' value='%s', key, val);
+        zstr_sendx(self->outbox, key, val, NULL);
+    }
+    zhash_destroy(&h);
+}
+
+void
 zsimpledisco_actor (zsock_t *pipe, void *args)
 {
     self_t *self = s_self_new (pipe);
     assert (self);
     //  Signal successful initialization
     zsock_signal (pipe, 0);
+
+    self->pipe = pipe;
+    self->outbox = (zsock_t *) args;
 
     zpoller_t *poller = zpoller_new (NULL);
     zpoller_add (poller, self->pipe);
@@ -434,6 +471,10 @@ zsimpledisco_actor (zsock_t *pipe, void *args)
 
         if(zpoller_expired(poller)) {
             //zsys_debug ("zsimpledisco: Idle");
+        }
+        if(zclock_mono() - self->last_deliver > self->deliver_inteval*1000) {
+            s_self_deliver_all(self);
+            self->last_deliver = zclock_mono();
         }
 
         if(zclock_mono() - self->last_cleanup > self->cleanup_interval*1000) {

@@ -1,44 +1,37 @@
 #include "czmq_library.h"
 #include "zsimpledisco.h"
 
-static int
-zsimpledisco_dump_hash(zhash_t *h)
-{
-    char *item;
-    int64_t now = zclock_mono();
-    for (item = zhash_first (h); item != NULL; item = zhash_next (h)) {
-        const char *key = zhash_cursor (h);
-        zsys_debug("Discovered data: key='%s' value='%s'", key, item);
-    }
-    return 0;
-}
-
 int main(int argn, char *argv[])
 {
     if(argn < 2) {
         fprintf(stderr, "Usage: %s tcp://127.0.0.1:9999 tcp://127.0.0.1:9998\n", argv[0]);
         exit(1);
     }
-    zactor_t *server1 = zactor_new (zsimpledisco, "disco");
-    assert (server1);
-    zstr_send (server1, "VERBOSE");
+
+    zsimpledisco_t *disco = zsimpledisco_new();
+    zsimpledisco_verbose(disco);
     for(int n=1;n<argn;n++) {
-        zstr_sendx (server1, "CONNECT", argv[n], NULL);
+        zsimpledisco_connect(disco, argv[n]);
     }
 
     char *key_str = zsys_sprintf ("Client-%d", getpid());
 
-    zstr_sendx (server1, "PUBLISH", key_str, "Hello", NULL);
+    zsimpledisco_publish(disco, key_str, "Hello");
+
+    zpoller_t *poller = zpoller_new (NULL);
+    zpoller_add(poller, zsimpledisco_socket(disco));
 
     while(1) {
-        zstr_send (server1, "VALUES");
-        zframe_t *data = zframe_recv(server1);
-        zhash_t *h = zhash_unpack(data);
-
-        zsimpledisco_dump_hash(h);
-        zhash_destroy(&h);
-        zclock_sleep (30000);
+        zsock_t *which = zpoller_wait (poller, 1000);
+        if (which == zsimpledisco_socket (disco)) {
+            zmsg_t *msg = zmsg_recv (which);
+            char *key = zmsg_popstr (msg);
+            char *value = zmsg_popstr (msg);
+            printf("KEY VALUE PAIR: '%s' '%s'\n", key, value);
+            free (key);
+            free (value);
+            zmsg_destroy (&msg);
+        }
     }
-
-    zactor_destroy(&server1);
+    zsimpledisco_destroy(&disco);
 }

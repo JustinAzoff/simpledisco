@@ -37,11 +37,9 @@ chat_actor (zsock_t *pipe, void *args)
         fprintf(stderr, "export DISCO_SERVER=tcp://localhost:9100\n");
         exit(1);
     }
-    zactor_t *disco = zactor_new (zsimpledisco, "disco");
-    uint64_t last_discovery = 0;
-    assert (disco);
-    zstr_send (disco, "VERBOSE");
-    zstr_sendx (disco, "CONNECT", disco_server, NULL);
+    zsimpledisco_t *disco = zsimpledisco_new();
+    zsimpledisco_verbose(disco);
+    zsimpledisco_connect(disco, disco_server);
 
     char *endpoint = getenv("ZYRE_BIND");
     if(!endpoint) {
@@ -58,14 +56,17 @@ chat_actor (zsock_t *pipe, void *args)
     zyre_start (node);
     char *uuid = zyre_uuid (node);
     printf("My uuid is %s\n", uuid);
-    zstr_sendx (disco, "PUBLISH", uuid, endpoint, NULL);
+    zsimpledisco_publish(disco, uuid, endpoint);
     zyre_join (node, "CHAT");
     zsock_signal (pipe, 0);     //  Signal "ready" to caller
 
+    zclock_sleep(1000);
+    zsimpledisco_get_values(disco);
+
     bool terminated = false;
-    zpoller_t *poller = zpoller_new (pipe, zyre_socket (node), NULL);
+    zpoller_t *poller = zpoller_new (pipe, zyre_socket (node), zsimpledisco_socket(disco), NULL);
     while (!terminated) {
-        void *which = zpoller_wait (poller, 1000);
+        void *which = zpoller_wait (poller, -1);
         if (which == pipe) {
             zmsg_t *msg = zmsg_recv (which);
             if (!msg)
@@ -114,20 +115,16 @@ chat_actor (zsock_t *pipe, void *args)
             free (message);
             zmsg_destroy (&msg);
         }
-
-        if(zclock_mono() - last_discovery > 30000) {
-            zstr_send (disco, "VALUES");
-            zframe_t *data = zframe_recv(disco);
-            zhash_t *h = zhash_unpack(data);
-            char *item;
-            for (item = zhash_first (h); item != NULL; item = zhash_next (h)) {
-                const char *key = zhash_cursor (h);
-                zsys_debug("Discovered data: key='%s' value='%s'", key, item);
-                zyre_require_peer (node, key, item);
-            }
-            zhash_destroy(&h);
-            last_discovery = zclock_mono();
-
+        else
+        if (which == zsimpledisco_socket (disco)) {
+            zmsg_t *msg = zmsg_recv (which);
+            char *key = zmsg_popstr (msg);
+            char *value = zmsg_popstr (msg);
+            zsys_debug("Discovered data: key='%s' value='%s'", key, value);
+            zyre_require_peer (node, key, value);
+            free (key);
+            free (value);
+            zmsg_destroy (&msg);
         }
     }
     zpoller_destroy (&poller);
