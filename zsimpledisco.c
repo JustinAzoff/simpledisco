@@ -1,10 +1,16 @@
 #include "czmq_library.h"
+#include "zsimpledisco.h"
+
+struct _zsimpledisco_t {
+    zactor_t *actor;            //  A zsimpledisco instance wraps the actor instance
+    zsock_t *inbox;             //  Receives incoming cluster traffic
+};
 
 //  --------------------------------------------------------------------------
 //  The self_t structure holds the state for one actor instance
-
 typedef struct {
     zsock_t *pipe;              //  Actor command pipe
+    zsock_t *outbox;            //  Outbox back to application
     bool terminated;            //  Did caller ask us to quit?
     bool verbose;               //  Verbose logging enabled?
     zsock_t *server_socket;     //  Socket for talking to clients
@@ -23,10 +29,56 @@ typedef struct {
     int64_t ts;
 } value_t;
 
+zsimpledisco_t *
+zsimpledisco_new()
+{
+    zsimpledisco_t *self = (zsimpledisco_t *) zmalloc (sizeof (zsimpledisco_t));
+    assert (self);
+
+    //  Create front-to-back pipe pair for data traffic
+    zsock_t *outbox;
+    self->inbox = zsys_create_pipe (&outbox);
+
+    //  Start node engine and wait for it to be ready
+    self->actor = zactor_new (zsimpledisco_actor, outbox);
+    assert (self->actor);
+
+    return self;
+}
+
+void
+zsimpledisco_destroy (zsimpledisco_t **self_p)
+{
+    assert (self_p);
+    if (*self_p) {
+        zsimpledisco_t *self = *self_p;
+        zactor_destroy (&self->actor);
+		zsock_destroy (&self->inbox);
+        freen (self);
+        *self_p = NULL;
+    }
+}
+void
+zsimpledisco_connect(zsimpledisco_t *self, const char *endpoint)
+{
+	zstr_sendx (self->actor, "CONNECT", endpoint, NULL);
+}
+
+void
+zsimpledisco_bind(zsimpledisco_t *self, const char *endpoint)
+{
+	zstr_sendx (self->actor, "BIND", endpoint, NULL);
+}
+
+void
+zsimpledisco_verbose(zsimpledisco_t *self)
+{
+	zstr_sendx (self->actor, "VERBOSE", NULL);
+}
 
 //Helpers
 
-static int
+int
 zsimpledisco_dump_hash(zhash_t *h)
 {
     value_t *val;
@@ -104,7 +156,7 @@ zstr_recv_with_timeout(zsock_t *sock, int timeout)
 {
     zpoller_t *poller = zpoller_new (NULL);
     zpoller_add (poller, sock);
-    zpoller_wait (poller, 1000);
+    zpoller_wait (poller, timeout);
     if(zpoller_expired(poller)) {
         zpoller_destroy(&poller);
         return NULL;
@@ -117,7 +169,7 @@ zframe_recv_with_timeout(zsock_t *sock, int timeout)
 {
     zpoller_t *poller = zpoller_new (NULL);
     zpoller_add (poller, sock);
-    zpoller_wait (poller, 1000);
+    zpoller_wait (poller, timeout);
     if(zpoller_expired(poller)) {
         zpoller_destroy(&poller);
         return NULL;
@@ -359,7 +411,7 @@ s_self_handle_pipe (self_t *self)
 }
 
 void
-zsimpledisco (zsock_t *pipe, void *args)
+zsimpledisco_actor (zsock_t *pipe, void *args)
 {
     self_t *self = s_self_new (pipe);
     assert (self);
