@@ -87,7 +87,6 @@ s_self_handle_server_socket (self_t *self)
         zsys_info ("zsimpledisco: server PUBLISH '%s' '%s'", key, value);
         zstr_free (&key);
         zstr_free (&value);
-        zsys_debug("zsimpledisco: server activity!");
         zframe_send (&routing_id, self->server_socket, ZFRAME_MORE + ZFRAME_REUSE);
         zstr_send(self->server_socket, "OK");
     }
@@ -124,7 +123,9 @@ zsimpledisco (zsock_t *pipe, void *args)
             s_self_handle_server_socket(self);
         }
 
-        zsys_debug ("zsimpledisco: Idle");
+        if(zpoller_expired(poller)) {
+            zsys_debug ("zsimpledisco: Idle");
+        }
     }
     s_self_destroy(&self);
 }
