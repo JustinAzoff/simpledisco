@@ -31,13 +31,13 @@ int main(int argn, char *argv[])
     zstr_sendx (server1, "PUBLISH", key_str, "Hello", NULL);
 
     while(1) {
-        zclock_sleep (5000);
         zstr_send (server1, "VALUES");
         zframe_t *data = zframe_recv(server1);
         zhash_t *h = zhash_unpack(data);
 
         zsimpledisco_dump_hash(h);
         zhash_destroy(&h);
+        zclock_sleep (30000);
     }
 
     zactor_destroy(&server1);
