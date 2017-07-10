@@ -1,0 +1,4 @@
+all: chat
+CFLAGS=-Wall -Wextra $(shell pkg-config --cflags libzyre)
+LDFLAGS= $(shell pkg-config --libs libzyre)
+chat: chat.c zsimpledisco.c
