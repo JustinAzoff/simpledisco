@@ -16,10 +16,12 @@ int main(int argn, char *argv[])
 
     char *key_str = zsys_sprintf ("Client-%d", getpid());
 
-    zsimpledisco_publish(disco, key_str, "Hello");
+    if(!getenv("QUIET"))
+        zsimpledisco_publish(disco, key_str, "Hello");
 
     zpoller_t *poller = zpoller_new (NULL);
     zpoller_add(poller, zsimpledisco_socket(disco));
+    zsimpledisco_get_values(disco);
 
     while(1) {
         zsock_t *which = zpoller_wait (poller, 1000);
