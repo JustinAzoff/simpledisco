@@ -37,6 +37,7 @@ int main(int argn, char *argv[])
         zhash_t *h = zhash_unpack(data);
 
         zsimpledisco_dump_hash(h);
+        zhash_destroy(&h);
     }
 
     zactor_destroy(&server1);
