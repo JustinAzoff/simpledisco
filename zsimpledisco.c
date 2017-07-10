@@ -70,6 +70,19 @@ s_self_connect(self_t *self, char *endpoint)
     zhash_update (self->client_sockets, endpoint, sock);
     return 0;
 }
+
+char *
+zstr_recv_with_timeout(zsock_t *sock, int timeout)
+{
+    zpoller_t *poller = zpoller_new (NULL);
+    zpoller_add (poller, sock);
+    zpoller_wait (poller, 1000);
+    if(zpoller_expired(poller)) {
+        return NULL;
+    }
+    return zstr_recv(sock);
+}
+
 static int
 s_self_client_publish(self_t *self, char *key, char *value)
 {
@@ -77,12 +90,19 @@ s_self_client_publish(self_t *self, char *key, char *value)
     for (sock = zhash_first (self->client_sockets); sock != NULL; sock = zhash_next (self->client_sockets)) {
         const char *endpoint = zhash_cursor (self->client_sockets);
         zsys_debug("zsimpledisco: Send %s => '%s' '%s'", endpoint, key, value);
-        //BROKEN???
         if(-1 == zstr_sendx(sock, "PUBLISH", key, value, NULL)) {
             perror("zsimpledisco: send failed?");
         }
-        char *response = zstr_recv(sock);
-        zsys_debug("zsimpledisco: Got response %s", response);
+        //TODO: this should do scatter/gather kind of thing
+        char *response = zstr_recv_with_timeout(sock, 1000);
+        if(response) {
+            zsys_debug("zsimpledisco: Got response from %s: %s", endpoint, response);
+            zstr_free(&response);
+        } else {
+            zsys_debug("zsimpledisco: no response from %s", endpoint);
+            zsock_destroy(&sock);
+            s_self_connect(self, endpoint);
+        }
     }
     return 0;
 }
@@ -101,8 +121,17 @@ s_self_client_publish_all(self_t *self)
             if(-1 == zstr_sendx(sock, "PUBLISH", key, value, NULL)) {
                 perror("zsimpledisco: send failed?");
             }
-            char *response = zstr_recv(sock);
-            zsys_debug("zsimpledisco: Got response %s", response);
+            //TODO: this should do scatter/gather kind of thing
+            char *response = zstr_recv_with_timeout(sock, 1000);
+            if(response) {
+                zsys_debug("zsimpledisco: Got response from %s: %s", endpoint, response);
+                zstr_free(&response);
+            } else {
+                zsys_debug("zsimpledisco: no response from %s", endpoint);
+                zsock_destroy(&sock);
+                s_self_connect(self, endpoint);
+                break;
+            }
         }
     }
     return 0;
@@ -278,7 +307,7 @@ zsimpledisco (zsock_t *pipe, void *args)
         }
 
         if(zpoller_expired(poller)) {
-            zsys_debug ("zsimpledisco: Idle");
+            //zsys_debug ("zsimpledisco: Idle");
         }
 
         if(zclock_mono() - self->last_cleanup > self->cleanup_interval*1000) {
