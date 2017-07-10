@@ -9,9 +9,13 @@ typedef struct {
     bool verbose;               //  Verbose logging enabled?
     zsock_t *server_socket;     //  Socket for talking to clients
     int64_t last_cleanup;       //  Time records were last cleaned up
+    int64_t last_send;          //  Time records were last sent
+    int send_interval;          //  Interval to re-send data to the server
     int cleanup_interval;       //  Cleanup interval in seconds
     int cleanup_max_age;        //  Cleanup records older than this many seconds
-    zhash_t *data;              //  key/value data, either from the server or client.
+    zhash_t *data;              //  key/value data, on the server
+    zhash_t *client_data;       //  key/value data, on the client
+    zhash_t *client_sockets;    //  endpoint/socket mapping of client sockets
 } self_t;
 
 typedef struct {
@@ -28,6 +32,8 @@ s_self_destroy (self_t **self_p)
         if (self->server_socket) // don't close STDIN
             zsock_destroy (&self->server_socket);
         zhash_destroy(&self->data);
+        zhash_destroy(&self->client_data);
+        zhash_destroy(&self->client_sockets); //disconnect first?
         freen (self);
         *self_p = NULL;
     }
@@ -43,42 +49,60 @@ s_self_new (zsock_t *pipe)
     self->server_socket = zsock_new (ZMQ_ROUTER);
     self->cleanup_interval = 1;
     self->cleanup_max_age = 10;
+    self->send_interval = self->cleanup_max_age - 2;
 
     self->data = zhash_new();
+    self->client_data = zhash_new();
+    self->client_sockets = zhash_new();
 
     return self;
 }
 
+
+// Client Stuff
+
 static int
-s_self_handle_pipe (self_t *self)
+s_self_connect(self_t *self, char *endpoint)
 {
-    //  Get just the command off the pipe
-    char *command = zstr_recv (self->pipe);
-    if (!command)
-        return -1;                  //  Interrupted
-
-    if (self->verbose)
-        zsys_info ("zsimpledisco: API command=%s", command);
-
-    if (streq (command, "VERBOSE"))
-        self->verbose = true;
-    else
-    if (streq (command, "BIND")) {
-        char *endpoint = zstr_recv (self->pipe);
-        if(-1 == zsock_bind (self->server_socket, "%s", endpoint))
-            zsys_warning ("could not bind to %s", endpoint);
-        zstr_free(&endpoint);
-    }
-    else
-    if (streq (command, "$TERM"))
-        self->terminated = true;
-    else {
-        zsys_error ("zsimpledisco: - invalid command: %s", command);
-        assert (false);
-    }
-    zstr_free (&command);
+    zsys_debug("zsimpledisco: Client wants to connect to %s", endpoint);
+    zsock_t * sock =  zsock_new (ZMQ_REQ);
+    zsock_connect(sock, "%s", endpoint);
+    zhash_update (self->client_sockets, endpoint, sock);
     return 0;
 }
+static int
+s_self_client_publish(self_t *self, char *key, char *value)
+{
+    zsock_t *sock;
+    for (sock = zhash_first (self->client_sockets); sock != NULL; sock = zhash_next (self->client_sockets)) {
+        const char *endpoint = zhash_cursor (self->client_sockets);
+        zsys_debug("zsimpledisco: Send %s => '%s' '%s'", endpoint, key, value);
+        zstr_sendx(sock, "PUBLISH", key, value, NULL);
+        char *response = zstr_recv(sock);
+        zsys_debug("zsimpledisco: Got response %s", response);
+    }
+    return 0;
+}
+
+static int
+s_self_client_publish_all(self_t *self)
+{
+    zsock_t *sock;
+    char * value;
+    for (sock = zhash_first (self->client_sockets); sock != NULL; sock = zhash_next (self->client_sockets)) {
+        const char *endpoint = zhash_cursor (self->client_sockets);
+        for (value = zhash_first (self->client_data); value != NULL; value = zhash_next (self->client_data)) {
+            const char *key = zhash_cursor (self->client_data);
+            zsys_debug("zsimpledisco: Send  %s => '%s' '%s'", endpoint, key, value);
+            zstr_sendx(sock, "PUBLISH", key, value, NULL);
+        }
+    }
+    return 0;
+
+}
+
+
+// Server Stuff
 
 static int
 s_self_add_kv(self_t *self, const char *key, char *value)
@@ -138,12 +162,8 @@ dump_hash(zhash_t *h)
 }
 
 static int
-s_self_handle_cleanup(self_t *self)
+s_self_handle_expire_data(self_t *self)
 {
-    zsys_debug("zsimpledisco: Cleanup");
-    
-    dump_hash(self->data);
-
     zlist_t *keys_to_delete = zlist_new();
 
     void *item;
@@ -164,7 +184,63 @@ s_self_handle_cleanup(self_t *self)
         del = (const char *) zlist_next (keys_to_delete);
     }
     zlist_destroy(&keys_to_delete);
+    return 0;
+}
 
+static int
+s_self_handle_cleanup(self_t *self)
+{
+    zsys_debug("zsimpledisco: Cleanup");
+    
+    dump_hash(self->data);
+    s_self_handle_expire_data(self);
+
+    return 0;
+}
+
+// Common stuff
+
+static int
+s_self_handle_pipe (self_t *self)
+{
+    //  Get just the command off the pipe
+    char *command = zstr_recv (self->pipe);
+    if (!command)
+        return -1;                  //  Interrupted
+
+    if (self->verbose)
+        zsys_info ("zsimpledisco: API command=%s", command);
+
+    if (streq (command, "VERBOSE"))
+        self->verbose = true;
+    else
+    if (streq (command, "BIND")) {
+        char *endpoint = zstr_recv (self->pipe);
+        if(-1 == zsock_bind (self->server_socket, "%s", endpoint))
+            zsys_warning ("could not bind to %s", endpoint);
+        zstr_free(&endpoint);
+    }
+    else
+    if (streq (command, "CONNECT")) {
+        char *endpoint = zstr_recv (self->pipe);
+        s_self_connect(self, endpoint);
+        zstr_free(&endpoint);
+    }
+    else
+    if (streq (command, "PUBLISH")) {
+        char *key = zstr_recv(self->pipe);
+        char *value = zstr_recv(self->pipe);
+        zhash_update (self->client_data, key, value);
+        s_self_client_publish(self, key, value);
+    }
+    else
+    if (streq (command, "$TERM"))
+        self->terminated = true;
+    else {
+        zsys_error ("zsimpledisco: - invalid command: %s", command);
+        assert (false);
+    }
+    zstr_free (&command);
     return 0;
 }
 
@@ -194,9 +270,13 @@ zsimpledisco (zsock_t *pipe, void *args)
             zsys_debug ("zsimpledisco: Idle");
         }
 
-        if(zclock_mono() - self->last_cleanup > self->cleanup_interval) {
+        if(zclock_mono() - self->last_cleanup > self->cleanup_interval*1000) {
             s_self_handle_cleanup(self);
             self->last_cleanup = zclock_mono();
+        }
+        if(zclock_mono() - self->last_send > self->send_interval*1000) {
+            s_self_client_publish_all(self);
+            self->last_send = zclock_mono();
         }
     }
     s_self_destroy(&self);
