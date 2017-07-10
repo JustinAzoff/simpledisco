@@ -24,6 +24,7 @@
 
 
 #include "zyre.h"
+#include "zsimpledisco.h"
 
 //  This actor will listen and publish anything received
 //  on the CHAT group
@@ -31,18 +32,40 @@
 static void 
 chat_actor (zsock_t *pipe, void *args)
 {
+    char *disco_server = getenv("DISCO_SERVER");
+    if(!disco_server) {
+        fprintf(stderr, "export DISCO_SERVER=tcp://localhost:9100\n");
+        exit(1);
+    }
+    zactor_t *disco = zactor_new (zsimpledisco, "disco");
+    uint64_t last_discovery = 0;
+    assert (disco);
+    zstr_send (disco, "VERBOSE");
+    zstr_sendx (disco, "CONNECT", disco_server, NULL);
+
+    char *endpoint = getenv("ZYRE_BIND");
+    if(!endpoint) {
+        fprintf(stderr, "export ZYRE_BIND=tcp://*:9200\n");
+        exit(1);
+    }
+
     zyre_t *node = zyre_new ((char *) args);
     if (!node)
         return;                 //  Could not create new node
 
+    zyre_set_verbose (node);
+    zyre_set_endpoint(node, endpoint);
     zyre_start (node);
+    char *uuid = zyre_uuid (node);
+    printf("My uuid is %s\n", uuid);
+    zstr_sendx (disco, "PUBLISH", uuid, endpoint, NULL);
     zyre_join (node, "CHAT");
     zsock_signal (pipe, 0);     //  Signal "ready" to caller
 
     bool terminated = false;
     zpoller_t *poller = zpoller_new (pipe, zyre_socket (node), NULL);
     while (!terminated) {
-        void *which = zpoller_wait (poller, -1);
+        void *which = zpoller_wait (poller, 1000);
         if (which == pipe) {
             zmsg_t *msg = zmsg_recv (which);
             if (!msg)
@@ -90,6 +113,21 @@ chat_actor (zsock_t *pipe, void *args)
             free (group);
             free (message);
             zmsg_destroy (&msg);
+        }
+
+        if(zclock_mono() - last_discovery > 30000) {
+            zstr_send (disco, "VALUES");
+            zframe_t *data = zframe_recv(disco);
+            zhash_t *h = zhash_unpack(data);
+            char *item;
+            for (item = zhash_first (h); item != NULL; item = zhash_next (h)) {
+                const char *key = zhash_cursor (h);
+                zsys_debug("Discovered data: key='%s' value='%s'", key, item);
+                zyre_require_peer (node, key, item);
+            }
+            zhash_destroy(&h);
+            last_discovery = zclock_mono();
+
         }
     }
     zpoller_destroy (&poller);
