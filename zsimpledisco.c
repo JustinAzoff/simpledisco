@@ -117,7 +117,6 @@ convert_hash(zhash_t *h)
 {
     zhash_t *kv = zhash_new();
     value_t *val;
-    int64_t now = zclock_mono();
     for (val = zhash_first (h); val != NULL; val = zhash_next (h)) {
         const char *key = zhash_cursor (h);
         //zsys_debug("zsimpledisco: Creating new hash with just %s=%s", key, val->value);
@@ -166,7 +165,7 @@ s_self_new (zsock_t *pipe)
 // Client Stuff
 
 static int
-s_self_connect(self_t *self, char *endpoint)
+s_self_connect(self_t *self, const char *endpoint)
 {
     zsys_debug("zsimpledisco: Client wants to connect to %s", endpoint);
     zsock_t * sock =  zsock_new (ZMQ_DEALER);
