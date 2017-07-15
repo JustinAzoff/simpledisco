@@ -169,7 +169,11 @@ s_self_connect(self_t *self, const char *endpoint)
 {
     zsys_debug("zsimpledisco: Client wants to connect to %s", endpoint);
     zsock_t * sock =  zsock_new (ZMQ_DEALER);
-    zsock_connect(sock, "%s", endpoint);
+    if(-1 == zsock_connect(sock, "%s", endpoint)) {
+        zsys_error("Invalid endpoint %s", endpoint);
+        return -1;
+    }
+
     zhash_update (self->client_sockets, endpoint, sock);
     return 0;
 }
