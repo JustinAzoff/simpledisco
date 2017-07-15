@@ -54,7 +54,7 @@ chat_actor (zsock_t *pipe, void *args)
     zyre_set_verbose (node);
     zyre_set_endpoint(node, endpoint);
     zyre_start (node);
-    char *uuid = zyre_uuid (node);
+    const char *uuid = zyre_uuid (node);
     printf("My uuid is %s\n", uuid);
     zsimpledisco_publish(disco, uuid, endpoint);
     zyre_join (node, "CHAT");
