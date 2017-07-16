@@ -263,7 +263,7 @@ s_self_client_publish(self_t *self, char *key, char *value)
             zstr_free(&response);
         } else {
             zsys_debug("zsimpledisco: no response from %s", endpoint);
-            if(sock)
+            if(zsock_is(sock))
                 zsock_destroy(&sock);
             s_self_connect(self, endpoint);
         }
@@ -291,7 +291,8 @@ s_self_client_publish_all(self_t *self)
                 zstr_free(&response);
             } else {
                 zsys_debug("zsimpledisco: no response from %s", endpoint);
-                zsock_destroy(&sock);
+                if(zsock_is(sock))
+                    zsock_destroy(&sock);
                 s_self_connect(self, endpoint);
                 break;
             }
@@ -332,7 +333,8 @@ s_self_client_get_values(self_t *self, zhash_t *merged)
             zframe_destroy(&data);
         } else {
             zsys_debug("zsimpledisco: no response from %s", endpoint);
-            zsock_destroy(&sock);
+            if(zsock_is(sock))
+                zsock_destroy(&sock);
             s_self_connect(self, endpoint);
         }
     }
