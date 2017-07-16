@@ -121,7 +121,9 @@ chat_actor (zsock_t *pipe, void *args)
             char *key = zmsg_popstr (msg);
             char *value = zmsg_popstr (msg);
             zsys_debug("Discovered data: key='%s' value='%s'", key, value);
-            zyre_require_peer (node, value, key);
+            if(strneq(endpoint, key)) {
+                zyre_require_peer (node, value, key);
+            }
             free (key);
             free (value);
             zmsg_destroy (&msg);
