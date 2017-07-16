@@ -328,6 +328,12 @@ s_self_handle_server_socket (self_t *self)
     if (streq (command, "PUBLISH")) {
         char *key = zstr_recv(self->server_socket);
         char *value = zstr_recv(self->server_socket);
+        if(key && strlen(key) > 8 && key[6] == '*') {
+            char *new_key = zsys_sprintf("tcp://%s%s", peer_address, &key[7]);
+            zsys_debug("zsimpledisco: Rewrote %s to %s", key, new_key);
+            zstr_free(&key);
+            key = new_key;
+        }
         zsys_info ("zsimpledisco: server PUBLISH '%s' '%s'", key, value);
         s_self_add_kv(self, key, value);
         zstr_free (&key);
