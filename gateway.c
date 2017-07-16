@@ -104,8 +104,10 @@ chat_actor (zsock_t *pipe, void *args)
             char *group = zmsg_popstr (msg);
             char *message = zmsg_popstr (msg);
 
-            if (streq (event, "SHOUT"))
+            if (streq (event, "SHOUT")) {
+                zsys_debug("zyre->pub %s: %s: %s", group, name, message);
                 zstr_sendx (pub, group, name, message, NULL);
+            }
 
             free (event);
             free (peer);
@@ -144,7 +146,7 @@ chat_actor (zsock_t *pipe, void *args)
             if (streq (command, "PUB")) {
                 char *group = zmsg_popstr (msg);
                 char *str = zmsg_popstr (msg);
-                zsys_debug("Sending to %s: %s", group, str);
+                zsys_debug("pub->zyre %s: %s", group, str);
                 zyre_shouts (node, group, "%s", str);
                 zstr_sendx (pub, group, "local", str, NULL);
                 free(group);
