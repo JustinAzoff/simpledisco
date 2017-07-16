@@ -24,6 +24,10 @@ typedef struct {
     zhash_t *data;              //  key/value data, on the server
     zhash_t *client_data;       //  key/value data, on the client
     zhash_t *client_sockets;    //  endpoint/socket mapping of client sockets
+
+    zactor_t *auth;             //  zauth Actor, if curve enabled
+    zcertstore_t *certstore;    //  certstore, for verififying connections
+    zcert_t *private_key;       //  curve private key
 } self_t;
 
 typedef struct {
@@ -60,6 +64,7 @@ zsimpledisco_destroy (zsimpledisco_t **self_p)
         *self_p = NULL;
     }
 }
+
 void
 zsimpledisco_connect(zsimpledisco_t *self, const char *endpoint)
 {
@@ -77,6 +82,18 @@ zsimpledisco_verbose(zsimpledisco_t *self)
 {
 	zstr_sendx (self->actor, "VERBOSE", NULL);
 }
+
+int
+zsimpledisco_set_certstore_path(zsimpledisco_t *self, const char *path)
+{
+	return zstr_sendx (self->actor, "SET CERTSTORE PATH", path, NULL);
+}
+int
+zsimpledisco_set_private_key_path(zsimpledisco_t *self, const char *path)
+{
+	return zstr_sendx (self->actor, "SET PRIVATE KEY PATH", path, NULL);
+}
+
 void
 zsimpledisco_publish(zsimpledisco_t *self, const char *key, const char *value)
 {
@@ -133,9 +150,16 @@ s_self_destroy (self_t **self_p)
         self_t *self = *self_p;
         if (self->server_socket) // don't close STDIN
             zsock_destroy (&self->server_socket);
+        zsock_destroy (&self->outbox);
         zhash_destroy(&self->data);
         zhash_destroy(&self->client_data);
         zhash_destroy(&self->client_sockets); //disconnect first?
+        if(self->auth)
+            zactor_destroy (&self->auth);
+        if(self->certstore)
+            zcertstore_destroy(&self->certstore);
+        if(self->private_key)
+            zcert_destroy(&self->private_key);
         freen (self);
         *self_p = NULL;
     }
@@ -300,6 +324,59 @@ s_self_client_get_values(self_t *self, zhash_t *merged)
 
 // Server Stuff
 
+int
+s_self_set_certstore_path(self_t *self, const char *path)
+{
+    if(self->verbose)
+        zsys_info("zsimpledisco: Certificate directory: %s", path);
+    if(self->auth == NULL) {
+        //Start authenticator
+        zactor_t *auth = zactor_new (zauth,NULL);
+        self->auth = auth;
+        if (self->verbose) {
+            zstr_send(auth,"VERBOSE");
+            zsock_wait(auth);
+        }
+    }
+    //  Tell the authenticator to use the certificate store in ./certs
+    zstr_sendx (self->auth, "CURVE", path, NULL);
+
+    if(self->certstore) {
+        zcertstore_destroy(&self->certstore);
+    }
+    self->certstore = zcertstore_new(path);
+    return 0;
+}
+
+int
+s_self_set_private_key_path(self_t *self, const char *path)
+{
+    if(self->verbose)
+        zsys_info("zsimpledisco: Using private key: %s", path);
+
+    self->private_key = zcert_load(path);
+    if(!self->private_key) {
+        zsys_error("zsimpledisco: unable to load private key from %s", path);
+        return 1;
+    }
+    return 0;
+}
+
+int
+s_self_bind(self_t *self, const char *endpoint)
+{
+    if(self->verbose)
+        zsys_info("zsimpledisco: binding to %s", endpoint);
+
+    if(self->private_key) {
+        zcert_apply (self->private_key, self->server_socket);
+        zsock_set_curve_server (self->server_socket, 1);
+        assert (zsock_mechanism (self->server_socket) == ZMQ_CURVE);
+    }
+
+    return -1 == zsock_bind (self->server_socket, "%s", endpoint);
+}
+
 static int
 s_self_add_kv(self_t *self, const char *key, char *value)
 {
@@ -408,10 +485,23 @@ s_self_handle_pipe (self_t *self)
     if (streq (command, "VERBOSE"))
         self->verbose = true;
     else
+    if (streq (command, "SET CERTSTORE PATH")) {
+        char *path = zstr_recv (self->pipe);
+        s_self_set_certstore_path(self, path);
+        zstr_free(&path);
+    }
+    else
+    if (streq (command, "SET PRIVATE KEY PATH")) {
+        char *path = zstr_recv (self->pipe);
+        if(s_self_set_private_key_path(self, path))
+            assert(false);//FIXME: right way to signal fatal error from inside an actor?
+        zstr_free(&path);
+    }
+    else
     if (streq (command, "BIND")) {
         char *endpoint = zstr_recv (self->pipe);
-        if(-1 == zsock_bind (self->server_socket, "%s", endpoint))
-            zsys_warning ("could not bind to %s", endpoint);
+        if(s_self_bind(self, endpoint))
+            zsys_error ("could not bind to %s", endpoint);
         zstr_free(&endpoint);
     }
     else
