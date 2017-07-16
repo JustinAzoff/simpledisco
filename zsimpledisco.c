@@ -192,13 +192,30 @@ static int
 s_self_connect(self_t *self, const char *endpoint)
 {
     zsys_debug("zsimpledisco: Client wants to connect to %s", endpoint);
+
+    char *public_key = NULL;
+    char *pipe = strchr(endpoint, '|');
+    char *original_endpoint = strdup(endpoint);
+    if(pipe != NULL) {
+        *pipe = '\0';
+        public_key = pipe+1;
+    }
+
     zsock_t * sock =  zsock_new (ZMQ_DEALER);
+
+    if(self->private_key && public_key) {
+        zsys_debug("zsimpledisco: Connecting to endpoint %s with public key %s", endpoint, public_key);
+        zcert_apply (self->private_key, sock);
+        zsock_set_curve_serverkey (sock, public_key);
+    }
+
     if(-1 == zsock_connect(sock, "%s", endpoint)) {
         zsys_error("Invalid endpoint %s", endpoint);
         return -1;
     }
 
-    zhash_update (self->client_sockets, endpoint, sock);
+    zhash_update (self->client_sockets, original_endpoint, sock);
+    free(original_endpoint);
     return 0;
 }
 

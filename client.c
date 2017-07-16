@@ -4,12 +4,18 @@
 int main(int argn, char *argv[])
 {
     if(argn < 2) {
-        fprintf(stderr, "Usage: %s tcp://127.0.0.1:9999 tcp://127.0.0.1:9998\n", argv[0]);
+        fprintf(stderr, "Usage: %s tcp://127.0.0.1:9999 tcp://127.0.0.1:9998|key\n", argv[0]);
         exit(1);
     }
 
     zsimpledisco_t *disco = zsimpledisco_new();
     zsimpledisco_verbose(disco);
+
+    const char *private_key_path = getenv("PRIVATE_KEY_PATH");
+    if(private_key_path) {
+        zsimpledisco_set_private_key_path(disco, private_key_path);
+    }
+
     for(int n=1;n<argn;n++) {
         zsimpledisco_connect(disco, argv[n]);
     }
