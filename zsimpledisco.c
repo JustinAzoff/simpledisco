@@ -315,12 +315,13 @@ s_self_handle_server_socket (self_t *self)
 {
     zframe_t *routing_id = zframe_recv (self->server_socket);
     //zframe_print(routing_id, "zsimpledisco: frame");
-    const char *peer_address = zframe_meta(routing_id, "Peer-Address");
+    zframe_t *command_frame = zframe_recv(self->server_socket);
+    char *command = zframe_strdup(command_frame);
+    const char *peer_address = zframe_meta(command_frame, "Peer-Address");
     if(peer_address) {
         zsys_debug("zsimpledisco: Peer Address is %s", peer_address);
-        //zstr_free(&peer_address); //FIXME: CRASHES
+        //zstr_free(&peer_address); FIXME: wtf does it want from me here?
     }
-    char *command = zstr_recv(self->server_socket);
 
     if (self->verbose)
         zsys_info ("zsimpledisco: server command=%s", command);
@@ -345,6 +346,7 @@ s_self_handle_server_socket (self_t *self)
         zhash_destroy(&kvhash);
     }
     zstr_free (&command);
+    zframe_destroy(&command_frame);
     return 0;
 }
 
