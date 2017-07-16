@@ -194,8 +194,8 @@ s_self_connect(self_t *self, const char *endpoint)
     zsys_debug("zsimpledisco: Client wants to connect to %s", endpoint);
 
     char *public_key = NULL;
-    char *pipe = strchr(endpoint, '|');
-    char *original_endpoint = strdup(endpoint);
+    char *endpoint_copy = strdup(endpoint);
+    char *pipe = strchr(endpoint_copy, '|');
     if(pipe != NULL) {
         *pipe = '\0';
         public_key = pipe+1;
@@ -209,13 +209,13 @@ s_self_connect(self_t *self, const char *endpoint)
         zsock_set_curve_serverkey (sock, public_key);
     }
 
-    if(-1 == zsock_connect(sock, "%s", endpoint)) {
-        zsys_error("Invalid endpoint %s", endpoint);
+    if(-1 == zsock_connect(sock, "%s", endpoint_copy)) {
+        zsys_error("Invalid endpoint %s", endpoint_copy);
         return -1;
     }
 
-    zhash_update (self->client_sockets, original_endpoint, sock);
-    free(original_endpoint);
+    zhash_update (self->client_sockets, endpoint, sock);
+    free(endpoint_copy);
     return 0;
 }
 
