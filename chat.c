@@ -52,7 +52,7 @@ chat_actor (zsock_t *pipe, void *args)
         return;                 //  Could not create new node
 
     zyre_set_verbose (node);
-    zyre_set_endpoint(node, endpoint);
+    zyre_set_endpoint(node, "%s", endpoint);
     zyre_start (node);
     const char *uuid = zyre_uuid (node);
     printf("My uuid is %s\n", uuid);
