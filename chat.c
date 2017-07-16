@@ -56,7 +56,7 @@ chat_actor (zsock_t *pipe, void *args)
     zyre_start (node);
     const char *uuid = zyre_uuid (node);
     printf("My uuid is %s\n", uuid);
-    zsimpledisco_publish(disco, uuid, endpoint);
+    zsimpledisco_publish(disco, endpoint, uuid);
     zyre_join (node, "CHAT");
     zsock_signal (pipe, 0);     //  Signal "ready" to caller
 
@@ -121,7 +121,7 @@ chat_actor (zsock_t *pipe, void *args)
             char *key = zmsg_popstr (msg);
             char *value = zmsg_popstr (msg);
             zsys_debug("Discovered data: key='%s' value='%s'", key, value);
-            zyre_require_peer (node, key, value);
+            zyre_require_peer (node, value, key);
             free (key);
             free (value);
             zmsg_destroy (&msg);
