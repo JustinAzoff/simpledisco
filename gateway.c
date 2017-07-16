@@ -132,8 +132,8 @@ chat_actor (zsock_t *pipe, void *args)
         else
         if (which == control) {
             zmsg_t *msg = zmsg_recv (which);
-            zsys_debug("Got message from control socket");
-            zmsg_print(msg);
+            //zsys_debug("Got message from control socket");
+            //zmsg_print(msg);
             zframe_t *routing_id = zmsg_pop(msg);
             char *command = zmsg_popstr (msg);
             if (streq (command, "SUB")) {
