@@ -412,6 +412,14 @@ s_self_handle_server_socket (self_t *self)
     zframe_t *command_frame = zframe_recv(self->server_socket);
     char *command = zframe_strdup(command_frame);
     const char *peer_address = zframe_meta(command_frame, "Peer-Address");
+    if(self->certstore) {
+        const char *peer_public_key = zframe_meta(command_frame, "User-Id");
+        zsys_debug("zsimpledisco: Peer key is %s", peer_public_key);
+        if(0 /*FIXME*/ && !zcertstore_lookup(self->certstore, peer_public_key)) {
+            zsys_info("zsimpledisco: Peer key %s no longer in certstore, ignoring.", peer_public_key);
+            goto out;
+        }
+    }
     if(peer_address) {
         zsys_debug("zsimpledisco: Peer Address is %s", peer_address);
         //zstr_free(&peer_address); FIXME: wtf does it want from me here?
@@ -445,6 +453,8 @@ s_self_handle_server_socket (self_t *self)
         zframe_send (&all_data, self->server_socket, 0);
         zhash_destroy(&kvhash);
     }
+
+out:
     zstr_free (&command);
     zframe_destroy(&command_frame);
     return 0;
