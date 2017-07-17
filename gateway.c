@@ -43,7 +43,7 @@ chat_actor (zsock_t *pipe, void *args)
 
     char *endpoint = getenv("ZYRE_BIND");
     if(!endpoint) {
-        fprintf(stderr, "export ZYRE_BIND=tcp://127.0.0.1:9200\n");
+        fprintf(stderr, "export ZYRE_BIND=tcp://*:9200\n");
         exit(1);
     }
 

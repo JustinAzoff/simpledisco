@@ -37,6 +37,11 @@ CZMQ_EXPORT void
 CZMQ_EXPORT int
     zsimpledisco_dump_hash(zhash_t *h);
 
+CZMQ_EXPORT int
+        zsimpledisco_set_certstore_path(zsimpledisco_t *self, const char *certstore_path);
+CZMQ_EXPORT int
+        zsimpledisco_set_private_key_path(zsimpledisco_t *self, const char *private_key_path);
+
 #ifdef __cplusplus
 }
 #endif
