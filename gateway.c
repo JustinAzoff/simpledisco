@@ -26,19 +26,41 @@
 #include "zyre.h"
 #include "zsimpledisco.h"
 
-//  This actor will listen and publish anything received
-//  on the CHAT group
-
 static void 
-chat_actor (zsock_t *pipe, void *args)
+gateway_actor (zsock_t *pipe, void *args)
 {
-    char *disco_server = getenv("DISCO_SERVER");
+    const char *disco_server = getenv("DISCO_SERVER");
+    const char *endpoint = getenv("ZYRE_BIND");
+    const char *private_key_path = getenv("PRIVATE_KEY_PATH");
+
+
+    const char *pubsub_endpoint = getenv("PUBSUB_ENDPOINT");
+    if(!pubsub_endpoint)
+        pubsub_endpoint = "tcp://*:14000";
+    const char *control_endpoint = getenv("CONTROL_ENDPOINT");
+    if(!control_endpoint)
+        control_endpoint = "tcp://*:14001";
+
+    zsock_t *pub = zsock_new(ZMQ_PUB);
+    zsock_t *control = zsock_new(ZMQ_ROUTER);
+
+    if (-1 == zsock_bind(pub, pubsub_endpoint)) {
+        fprintf(stderr, "Faild to bind to PUBSUB_ENDPOINT %s", pubsub_endpoint);
+        perror(" ");
+        exit(1);
+    }
+    if (-1 == zsock_bind(control, control_endpoint)) {
+        fprintf(stderr, "Faild to bind to CONTROL_ENDPOINT %s", control_endpoint);
+        perror(" ");
+        exit(1);
+    }
+
+
     if(!disco_server) {
         fprintf(stderr, "export DISCO_SERVER=tcp://localhost:9100\n");
         exit(1);
     }
 
-    char *endpoint = getenv("ZYRE_BIND");
     if(!endpoint) {
         fprintf(stderr, "export ZYRE_BIND=tcp://*:9200\n");
         exit(1);
@@ -46,6 +68,11 @@ chat_actor (zsock_t *pipe, void *args)
 
     zsimpledisco_t *disco = zsimpledisco_new();
     zsimpledisco_verbose(disco);
+
+    if(private_key_path) {
+        zsimpledisco_set_private_key_path(disco, private_key_path);
+    }
+
     zsimpledisco_connect(disco, disco_server);
 
     zyre_t *node = zyre_new ((char *) args);
@@ -65,18 +92,6 @@ chat_actor (zsock_t *pipe, void *args)
     zsimpledisco_get_values(disco);
 
     bool terminated = false;
-
-    zsock_t *pub = zsock_new(ZMQ_PUB);
-    zsock_t *control = zsock_new(ZMQ_ROUTER);
-
-    if (-1 == zsock_bind(pub, "tcp://*:14000")) {
-        perror("Bind: ");
-        exit(1);
-    }
-    if (-1 == zsock_bind(control, "tcp://*:14001")) {
-        perror("Bind: ");
-        exit(1);
-    }
 
     zpoller_t *poller = zpoller_new (pipe, zyre_socket (node), zsimpledisco_socket(disco), control, NULL);
     while (!terminated) {
@@ -211,7 +226,7 @@ main (int argc, char *argv [])
         fprintf(stderr, "Missing ZYRE_BIND env var:\nexport ZYRE_BIND=tcp://*:9200\n");
         exit(1);
     }
-    zactor_t *actor = zactor_new (chat_actor, argv [1]);
+    zactor_t *actor = zactor_new (gateway_actor, argv [1]);
     assert (actor);
     
     while (!zsys_interrupted) {
