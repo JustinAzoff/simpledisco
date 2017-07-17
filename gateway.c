@@ -37,15 +37,16 @@ chat_actor (zsock_t *pipe, void *args)
         fprintf(stderr, "export DISCO_SERVER=tcp://localhost:9100\n");
         exit(1);
     }
-    zsimpledisco_t *disco = zsimpledisco_new();
-    zsimpledisco_verbose(disco);
-    zsimpledisco_connect(disco, disco_server);
 
     char *endpoint = getenv("ZYRE_BIND");
     if(!endpoint) {
         fprintf(stderr, "export ZYRE_BIND=tcp://*:9200\n");
         exit(1);
     }
+
+    zsimpledisco_t *disco = zsimpledisco_new();
+    zsimpledisco_verbose(disco);
+    zsimpledisco_connect(disco, disco_server);
 
     zyre_t *node = zyre_new ((char *) args);
     if (!node)
@@ -132,8 +133,8 @@ chat_actor (zsock_t *pipe, void *args)
         else
         if (which == control) {
             zmsg_t *msg = zmsg_recv (which);
-            zsys_debug("Got message from control socket");
-            zmsg_print(msg);
+            //zsys_debug("Got message from control socket");
+            //zmsg_print(msg);
             zframe_t *routing_id = zmsg_pop(msg);
             char *command = zmsg_popstr (msg);
             if (streq (command, "SUB")) {
@@ -162,12 +163,53 @@ chat_actor (zsock_t *pipe, void *args)
     zyre_destroy (&node);
 }
 
+int keygen()
+{
+    const char *keypair_filename = "client.key";
+    const char *keypair_filename_secret = "client.key_secret";
+
+    if( access( keypair_filename, F_OK ) != -1 ) {
+        fprintf(stderr, "%s already exists\n", keypair_filename);
+        return 1;
+    }
+    if( access( keypair_filename_secret, F_OK ) != -1 ) {
+        fprintf(stderr, "%s already exists\n", keypair_filename);
+        return 1;
+    }
+    zcert_t *cert = zcert_new();
+    if(!cert) {
+        perror("Error creating new certificate");
+        return 1;
+    }
+    if(-1 == zcert_save(cert, keypair_filename)) {
+        perror("Error writing key to client.key");
+        return 1;
+    }
+    printf("Keys written to %s and %s\n", keypair_filename, keypair_filename_secret);
+    return 0;
+}
+
 int
 main (int argc, char *argv [])
 {
-    if (argc < 1) {
-        puts ("syntax: ./gateway");
-        exit (0);
+    if (argc > 2) {
+        puts ("syntax: ./gateway [keygen]");
+        exit (1);
+    }
+    if (argc == 2 && streq(argv[1], "keygen")) {
+        exit(keygen());
+    }
+
+    char *disco_server = getenv("DISCO_SERVER");
+    if(!disco_server) {
+        fprintf(stderr, "Missing DISCO_SERVER env var:\nexport DISCO_SERVER=tcp://localhost:9100\n");
+        exit(1);
+    }
+
+    char *endpoint = getenv("ZYRE_BIND");
+    if(!endpoint) {
+        fprintf(stderr, "Missing ZYRE_BIND env var:\nexport ZYRE_BIND=tcp://*:9200\n");
+        exit(1);
     }
     zactor_t *actor = zactor_new (chat_actor, argv [1]);
     assert (actor);
