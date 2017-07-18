@@ -69,8 +69,10 @@ gateway_actor (zsock_t *pipe, void *args)
     zsimpledisco_t *disco = zsimpledisco_new();
     zsimpledisco_verbose(disco);
 
+    zcert_t *cert = NULL;
     if(private_key_path) {
         zsimpledisco_set_private_key_path(disco, private_key_path);
+        cert = zcert_load(private_key_path);
     }
 
     zsimpledisco_connect(disco, disco_server);
@@ -80,6 +82,10 @@ gateway_actor (zsock_t *pipe, void *args)
         return;                 //  Could not create new node
 
     //zyre_set_verbose (node);
+    if(cert) {
+        zyre_set_curve_key_public(node, zcert_public_txt(cert));
+        zyre_set_curve_key_secret(node, zcert_secret_txt(cert));
+    }
     zyre_set_endpoint(node, "%s", endpoint);
     zyre_start (node);
     const char *uuid = zyre_uuid (node);
