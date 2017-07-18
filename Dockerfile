@@ -1,8 +1,8 @@
-FROM ubuntu:trusty
+FROM ubuntu:xenial
 MAINTAINER czmq Developers <zeromq-dev@lists.zeromq.org>
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update -y -q
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -q --force-yes build-essential git-core libtool autotools-dev autoconf automake pkg-config unzip libkrb5-dev cmake
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y -q --force-yes build-essential git-core libtool autotools-dev autoconf automake pkg-config unzip libkrb5-dev cmake sudo
 
 RUN useradd -d /home/zmq -m -s /bin/bash zmq
 RUN echo "zmq ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/zmq
@@ -31,6 +31,7 @@ RUN sudo ldconfig
 WORKDIR /home/zmq
 RUN git clone --quiet --branch curve_merges git://github.com/JustinAzoff/zyre.git zyre
 WORKDIR /home/zmq/zyre
+RUN git pull #2017-07-17 -- 1
 RUN ./autogen.sh 2> /dev/null
 RUN ./configure --quiet --without-docs
 RUN make
@@ -40,5 +41,5 @@ RUN sudo ldconfig
 RUN mkdir /home/zmq/simpledisco
 WORKDIR /home/zmq/simpledisco
 COPY . .
-RUN make
-RUN make -f Makefile.chat
+RUN make && make -f Makefile.chat gateway.static
+RUN ls -l client server chat gateway
