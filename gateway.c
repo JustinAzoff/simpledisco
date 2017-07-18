@@ -91,16 +91,15 @@ gateway_actor (zsock_t *pipe, void *args)
         return;                 //  Could not create new node
 
     zyre_set_verbose (node);
-    if(cert) {
-        zyre_set_curve_key_public(node, zcert_public_txt(cert));
-        zyre_set_curve_key_secret(node, zcert_secret_txt(cert));
-    }
-    zclock_sleep(1000);
-    zyre_set_endpoint(node, "%s", endpoint);
     zyre_start (node);
+    zclock_sleep(1000);
+    if(cert) {
+        zyre_set_curve_keypair(node, zcert_public_txt(cert), zcert_secret_txt(cert));
+    }
+    zyre_set_endpoint(node, "%s", endpoint);
     const char *uuid = zyre_uuid (node);
     printf("My uuid is %s\n", uuid);
-    if(0 && cert) {
+    if(cert) {
         char *published_endpoint = zsys_sprintf("%s|%s", endpoint, zcert_public_txt(cert));
         zsimpledisco_publish(disco, published_endpoint, uuid);
     } else {
