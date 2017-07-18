@@ -1,8 +1,8 @@
 all: chat gateway
 CFLAGS=-Wall -Wextra $(shell pkg-config --cflags libzyre)
-LDFLAGS= $(shell pkg-config --libs libzyre)
-chat: chat.c zsimpledisco.c
-gateway: gateway.c zsimpledisco.c
+LOADLIBES= $(shell pkg-config --libs libzyre)
+chat: chat.o zsimpledisco.o
+gateway: gateway.o zsimpledisco.o
 
 chat.static: chat.c zsimpledisco.c
 	cc  chat.c zsimpledisco.c   -o chat -static-libstdc++  -static -static-libgcc -Wall -Wextra $(shell pkg-config --cflags --libs libzyre) -lpthread -lstdc++  -lm
