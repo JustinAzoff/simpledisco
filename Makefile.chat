@@ -7,3 +7,7 @@ gateway: gateway.c zsimpledisco.c
 chat.static: chat.c zsimpledisco.c
 	cc  chat.c zsimpledisco.c   -o chat -static-libstdc++  -static -static-libgcc -Wall -Wextra -DZYRE_BUILD_DRAFT_API=1 -DCZMQ_BUILD_DRAFT_API=1 -DZMQ_BUILD_DRAFT_API=1 -I/home/justin/local/include   -L/home/justin/local/lib -lzyre -lczmq -lzmq   -lpthread -lstdc++  -lm
 	@echo OK!
+
+gateway.static: gateway.c zsimpledisco.c
+	cc  gateway.c zsimpledisco.c   -o gateway -static-libstdc++  -static -static-libgcc -Wall -Wextra -DZYRE_BUILD_DRAFT_API=1 -DCZMQ_BUILD_DRAFT_API=1 -DZMQ_BUILD_DRAFT_API=1  -lzyre -lczmq -lzmq   -lpthread -lstdc++  -lm
+	@echo OK!
