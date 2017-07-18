@@ -80,7 +80,6 @@ gateway_actor (zsock_t *pipe, void *args)
         zactor_t *auth = zactor_new (zauth,NULL);
         zstr_send(auth,"VERBOSE");
         zsock_wait(auth);
-        zstr_sendx (auth, "ALLOW","117.0.0.1",NULL);    
         zstr_sendx (auth, "CURVE", public_key_dir_path, NULL);
         zsock_wait(auth);
     }
@@ -229,6 +228,7 @@ int keygen()
 int
 main (int argc, char *argv [])
 {
+
     if (argc > 2) {
         puts ("syntax: ./gateway [node_name|keygen]");
         exit (1);
