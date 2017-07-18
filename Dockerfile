@@ -31,7 +31,7 @@ RUN sudo ldconfig
 WORKDIR /home/zmq
 RUN git clone --quiet --branch curve_merges git://github.com/JustinAzoff/zyre.git zyre
 WORKDIR /home/zmq/zyre
-RUN git pull #2017-07-17 -- 1
+RUN git pull #2017-07-17 -- 2
 RUN ./autogen.sh 2> /dev/null
 RUN ./configure --quiet --without-docs
 RUN make

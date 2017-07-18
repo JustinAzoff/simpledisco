@@ -81,8 +81,11 @@ gateway_actor (zsock_t *pipe, void *args)
     if (!node)
         return;                 //  Could not create new node
 
-    //zyre_set_verbose (node);
+    zyre_set_verbose (node);
     if(cert) {
+        zactor_t *auth = zactor_new (zauth,NULL);
+        zstr_sendx (auth, "CURVE", path, NULL);
+
         zyre_set_curve_key_public(node, zcert_public_txt(cert));
         zyre_set_curve_key_secret(node, zcert_secret_txt(cert));
     }
@@ -214,7 +217,7 @@ int
 main (int argc, char *argv [])
 {
     if (argc > 2) {
-        puts ("syntax: ./gateway [keygen]");
+        puts ("syntax: ./gateway [node_name|keygen]");
         exit (1);
     }
     if (argc == 2 && streq(argv[1], "keygen")) {
