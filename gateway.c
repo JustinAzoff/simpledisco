@@ -38,9 +38,9 @@ gateway_actor (zsock_t *pipe, void *args)
     const char *control_endpoint = getenv("CONTROL_ENDPOINT");
 
     if(!pubsub_endpoint)
-        pubsub_endpoint = "tcp://*:14000";
+        pubsub_endpoint = "tcp://127.0.0.1:14000";
     if(!control_endpoint)
-        control_endpoint = "tcp://*:14001";
+        control_endpoint = "tcp://127.0.0.1:14001";
     if(!public_key_dir_path)
         public_key_dir_path = "./public_keys";
 
