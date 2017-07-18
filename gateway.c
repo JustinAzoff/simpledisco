@@ -32,14 +32,17 @@ gateway_actor (zsock_t *pipe, void *args)
     const char *disco_server = getenv("DISCO_SERVER");
     const char *endpoint = getenv("ZYRE_BIND");
     const char *private_key_path = getenv("PRIVATE_KEY_PATH");
-
+    const char *public_key_dir_path = getenv("PUBLIC_KEY_DIR_PATH");
 
     const char *pubsub_endpoint = getenv("PUBSUB_ENDPOINT");
+    const char *control_endpoint = getenv("CONTROL_ENDPOINT");
+
     if(!pubsub_endpoint)
         pubsub_endpoint = "tcp://*:14000";
-    const char *control_endpoint = getenv("CONTROL_ENDPOINT");
     if(!control_endpoint)
         control_endpoint = "tcp://*:14001";
+    if(!public_key_dir_path)
+        public_key_dir_path = "./public_keys";
 
     zsock_t *pub = zsock_new(ZMQ_PUB);
     zsock_t *control = zsock_new(ZMQ_ROUTER);
@@ -84,7 +87,7 @@ gateway_actor (zsock_t *pipe, void *args)
     zyre_set_verbose (node);
     if(cert) {
         zactor_t *auth = zactor_new (zauth,NULL);
-        zstr_sendx (auth, "CURVE", path, NULL);
+        zstr_sendx (auth, "CURVE", public_key_dir_path, NULL);
 
         zyre_set_curve_key_public(node, zcert_public_txt(cert));
         zyre_set_curve_key_secret(node, zcert_secret_txt(cert));
