@@ -90,6 +90,9 @@ gateway_actor (zsock_t *pipe, void *args)
     if (!node)
         return;                 //  Could not create new node
 
+    //FIXME: The order of the next few lines matters a lot for some reason
+    //I should be able to start the node after the setup, but that isn't working
+    //because self->inbox gets hosed somehow
     zyre_set_verbose (node);
     zyre_start (node);
     zclock_sleep(1000);
