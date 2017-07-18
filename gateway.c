@@ -150,7 +150,7 @@ gateway_actor (zsock_t *pipe, void *args)
             char *key = zmsg_popstr (msg);
             char *value = zmsg_popstr (msg);
             zsys_debug("Discovered data: key='%s' value='%s'", key, value);
-            if(strneq(endpoint, key)) {
+            if(strneq(endpoint, key) && strneq(uuid, value)) {
                 zyre_require_peer (node, value, key);
             }
             free (key);
