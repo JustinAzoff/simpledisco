@@ -47,12 +47,12 @@ gateway_actor (zsock_t *pipe, void *args)
     zsock_t *pub = zsock_new(ZMQ_PUB);
     zsock_t *control = zsock_new(ZMQ_ROUTER);
 
-    if (-1 == zsock_bind(pub, pubsub_endpoint)) {
+    if (-1 == zsock_bind(pub, "%s", pubsub_endpoint)) {
         fprintf(stderr, "Faild to bind to PUBSUB_ENDPOINT %s", pubsub_endpoint);
         perror(" ");
         exit(1);
     }
-    if (-1 == zsock_bind(control, control_endpoint)) {
+    if (-1 == zsock_bind(control, "%s", control_endpoint)) {
         fprintf(stderr, "Faild to bind to CONTROL_ENDPOINT %s", control_endpoint);
         perror(" ");
         exit(1);
