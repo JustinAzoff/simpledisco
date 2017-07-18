@@ -76,6 +76,13 @@ gateway_actor (zsock_t *pipe, void *args)
     if(private_key_path) {
         zsimpledisco_set_private_key_path(disco, private_key_path);
         cert = zcert_load(private_key_path);
+
+        zactor_t *auth = zactor_new (zauth,NULL);
+        zstr_send(auth,"VERBOSE");
+        zsock_wait(auth);
+        zstr_sendx (auth, "ALLOW","117.0.0.1",NULL);    
+        zstr_sendx (auth, "CURVE", public_key_dir_path, NULL);
+        zsock_wait(auth);
     }
 
     zsimpledisco_connect(disco, disco_server);
@@ -86,17 +93,20 @@ gateway_actor (zsock_t *pipe, void *args)
 
     zyre_set_verbose (node);
     if(cert) {
-        zactor_t *auth = zactor_new (zauth,NULL);
-        zstr_sendx (auth, "CURVE", public_key_dir_path, NULL);
-
         zyre_set_curve_key_public(node, zcert_public_txt(cert));
         zyre_set_curve_key_secret(node, zcert_secret_txt(cert));
     }
+    zclock_sleep(1000);
     zyre_set_endpoint(node, "%s", endpoint);
     zyre_start (node);
     const char *uuid = zyre_uuid (node);
     printf("My uuid is %s\n", uuid);
-    zsimpledisco_publish(disco, endpoint, uuid);
+    if(0 && cert) {
+        char *published_endpoint = zsys_sprintf("%s|%s", endpoint, zcert_public_txt(cert));
+        zsimpledisco_publish(disco, published_endpoint, uuid);
+    } else {
+        zsimpledisco_publish(disco, endpoint, uuid);
+    }
     //zyre_join (node, "CHAT");
     zsock_signal (pipe, 0);     //  Signal "ready" to caller
 
@@ -238,6 +248,7 @@ main (int argc, char *argv [])
         fprintf(stderr, "Missing ZYRE_BIND env var:\nexport ZYRE_BIND=tcp://*:9200\n");
         exit(1);
     }
+
     zactor_t *actor = zactor_new (gateway_actor, argv [1]);
     assert (actor);
     
