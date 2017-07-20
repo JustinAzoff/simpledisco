@@ -51,6 +51,7 @@ chat_actor (zsock_t *pipe, void *args)
     if (!node)
         return;                 //  Could not create new node
 
+    zyre_set_evasive_timeout(node, 25000);
     zyre_set_verbose (node);
     zyre_set_endpoint(node, "%s", endpoint);
     zyre_start (node);
