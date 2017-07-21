@@ -434,12 +434,9 @@ s_self_handle_server_socket (self_t *self)
             goto out;
         }
     }
-    if(peer_address && self->verbose) {
-        zsys_debug("zsimpledisco: Peer Address is %s", peer_address);
-    }
 
     if (self->verbose)
-        zsys_info ("zsimpledisco: server command=%s", command);
+        zsys_info ("zsimpledisco: server peer=%s command=%s", peer_address ? peer_address: "", command);
     if (streq (command, "PUBLISH")) {
         char *key = zstr_recv(self->server_socket);
         char *value = zstr_recv(self->server_socket);
