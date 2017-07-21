@@ -35,6 +35,16 @@ typedef struct {
     int64_t ts;
 } value_t;
 
+void
+value_t_free(void *item_p)
+{
+    assert(item_p);
+    value_t *item = item_p;
+    free(item->value);
+    free(item);
+    item=NULL;
+}
+
 zsimpledisco_t *
 zsimpledisco_new()
 {
@@ -133,6 +143,7 @@ zhash_t *
 convert_hash(zhash_t *h)
 {
     zhash_t *kv = zhash_new();
+    zhash_autofree(kv);
     value_t *val;
     for (val = zhash_first (h); val != NULL; val = zhash_next (h)) {
         const char *key = zhash_cursor (h);
@@ -401,9 +412,10 @@ static int
 s_self_add_kv(self_t *self, const char *key, char *value)
 {
     value_t *record = (value_t *) zmalloc (sizeof (value_t));
-    record->value = value;
+    record->value = strdup(value);
     record->ts = zclock_mono();
     zhash_update (self->data, key, record);
+    zhash_freefn (self->data, key, value_t_free);
     return 0;
 }
 
@@ -411,7 +423,6 @@ static int
 s_self_handle_server_socket (self_t *self)
 {
     zframe_t *routing_id = zframe_recv (self->server_socket);
-    //zframe_print(routing_id, "zsimpledisco: frame");
     zframe_t *command_frame = zframe_recv(self->server_socket);
     char *command = zframe_strdup(command_frame);
     const char *peer_address = zframe_meta(command_frame, "Peer-Address");
@@ -423,9 +434,8 @@ s_self_handle_server_socket (self_t *self)
             goto out;
         }
     }
-    if(peer_address) {
+    if(peer_address && self->verbose) {
         zsys_debug("zsimpledisco: Peer Address is %s", peer_address);
-        //zstr_free(&peer_address); FIXME: wtf does it want from me here?
     }
 
     if (self->verbose)
@@ -442,15 +452,15 @@ s_self_handle_server_socket (self_t *self)
         zsys_info ("zsimpledisco: server PUBLISH '%s' '%s'", key, value);
         s_self_add_kv(self, key, value);
         zstr_free (&key);
-        //zstr_free (&value); //NOT NEEDED when stored in zhash?
-        zframe_send (&routing_id, self->server_socket, ZFRAME_MORE + ZFRAME_REUSE);
+        zstr_free (&value);
+        zframe_send (&routing_id, self->server_socket, ZFRAME_MORE);
         if(-1 == zstr_send(self->server_socket, "OK")) {
             perror("sending OK failed?");
         }
     }
     else
     if (streq (command, "VALUES")) {
-        zframe_send (&routing_id, self->server_socket, ZFRAME_MORE + ZFRAME_REUSE);
+        zframe_send (&routing_id, self->server_socket, ZFRAME_MORE);
         zhash_t *kvhash = convert_hash(self->data);
         zframe_t *all_data =  zhash_pack (kvhash);
         zframe_send (&all_data, self->server_socket, 0);
