@@ -340,7 +340,7 @@ s_self_client_get_values(self_t *self, zhash_t *merged)
             zhash_t *h = zhash_unpack(data);
             zsys_debug("zsimpledisco: Got response from %s", endpoint);
             zsimpledisco_merge_hash(merged, h);
-            //zhash_destroy(&h); FIXME: breaks things
+            zhash_destroy(&h);
             zframe_destroy(&data);
         } else {
             zsys_debug("zsimpledisco: no response from %s", endpoint);
@@ -575,6 +575,7 @@ void
 s_self_deliver_all (self_t *self)
 {
     zhash_t *h = zhash_new();
+    zhash_autofree(h);
     s_self_client_get_values(self, h);
     char *val;
     for (val = zhash_first (h); val != NULL; val = zhash_next (h)) {
