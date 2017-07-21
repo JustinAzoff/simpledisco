@@ -468,14 +468,13 @@ s_self_handle_expire_data(self_t *self)
 {
     zlist_t *keys_to_delete = zlist_new();
 
-    void *item;
+    value_t *item;
     int64_t now = zclock_mono();
     int64_t expiration_cuttoff = now - (1000 * self->cleanup_max_age);
     for (item = zhash_first (self->data); item != NULL; item = zhash_next (self->data)) {
         const char *key = zhash_cursor (self->data);
-        value_t *val = item;
-        if(val->ts < expiration_cuttoff) {
-            zsys_debug("zsimpledisco: expire key='%s' value='%s' ts='%ld' age='%ld'", key, val->value, val->ts, (now-val->ts) / 1000);
+        if(item->ts < expiration_cuttoff) {
+            zsys_debug("zsimpledisco: expire key='%s' value='%s' ts='%ld' age='%ld'", key, item->value, item->ts, (now-item->ts) / 1000);
             if(-1 == zlist_append(keys_to_delete, (void *)key)) {
                 zsys_error("zsimpledisco: zlist_append failed");
             }
