@@ -230,6 +230,18 @@ s_self_connect(self_t *self, const char *endpoint)
     return 0;
 }
 
+static int
+s_self_connect_initial(self_t *self, const char *endpoint)
+{
+    void *val = zhash_lookup(self->client_sockets, endpoint);
+    if(val)
+        return 0;
+    int ret =  s_self_connect(self, endpoint);
+    self->last_deliver = 0;
+    return ret;
+}
+
+
 char *
 zstr_recv_with_timeout(zsock_t *sock, int timeout)
 {
@@ -546,7 +558,7 @@ s_self_handle_pipe (self_t *self)
     else
     if (streq (command, "CONNECT")) {
         char *endpoint = zstr_recv (self->pipe);
-        s_self_connect(self, endpoint);
+        s_self_connect_initial(self, endpoint);
         zstr_free(&endpoint);
     }
     else

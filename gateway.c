@@ -46,7 +46,7 @@ bootstrap_simpledisco(zsimpledisco_t *disco, zcertstore_t *certstore)
         const char *public_key = zcert_public_txt(cert);
         if(endpoint) {
             char *real_endpoint = zsys_sprintf("%s|%s", endpoint, public_key);
-            zsys_info("gateway: Connecting to simpledisco server @ %s using %s\n", endpoint, public_key);
+            zsys_info("gateway: Connecting to simpledisco server @ %s using %s", endpoint, public_key);
             zsimpledisco_connect(disco, real_endpoint);
             zstr_free(&real_endpoint);
             endpoint_count++;
@@ -100,6 +100,8 @@ maybe_create_untrusted_key(
 static void 
 gateway_actor (zsock_t *pipe, void *args)
 {
+    int64_t last_bootstrap = 0;
+
     const char *endpoint = getenv_with_default(
         "ZYRE_BIND", "tcp://*:5670");
 
@@ -154,8 +156,6 @@ gateway_actor (zsock_t *pipe, void *args)
         zsock_wait(auth);
     }
 
-    bootstrap_simpledisco(disco, certstore);
-
     zyre_t *node = zyre_new ((char *) args);
     if (!node)
         return;                 //  Could not create new node
@@ -182,13 +182,12 @@ gateway_actor (zsock_t *pipe, void *args)
     zsock_signal (pipe, 0);     //  Signal "ready" to caller
 
     //zclock_sleep(1000);
-    zsimpledisco_get_values(disco);
 
     bool terminated = false;
 
     zpoller_t *poller = zpoller_new (pipe, zyre_socket (node), zsimpledisco_socket(disco), control, NULL);
     while (!terminated) {
-        void *which = zpoller_wait (poller, -1);
+        void *which = zpoller_wait (poller, 5000);
         if (which == pipe) {
             zmsg_t *msg = zmsg_recv (which);
             if (!msg)
@@ -265,6 +264,13 @@ gateway_actor (zsock_t *pipe, void *args)
             zframe_destroy(&routing_id);
             zmsg_destroy(&msg);
         }
+
+        if(zclock_mono() - last_bootstrap > 30*1000) {
+            bootstrap_simpledisco(disco, certstore);
+            last_bootstrap = zclock_mono();
+        }
+
+
     }
     zpoller_destroy (&poller);
     zyre_stop (node);
