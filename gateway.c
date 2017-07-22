@@ -54,12 +54,49 @@ bootstrap_simpledisco(zsimpledisco_t *disco, zcertstore_t *certstore)
         zsys_error("gateway: No certs found in certstore that contain simpledisco-endpoint metadata");
     zlistx_destroy(&certs);
 }
+
+void
+maybe_create_untrusted_key(
+    zcertstore_t *certstore, zcertstore_t *certstore_untrusted,
+    const char *trusted_path, const char *untrusted_path,
+    const char *public_key)
+{
+    zcert_t *cert;
+    cert = zcertstore_lookup(certstore, public_key);
+    if(cert)
+        return;
+
+    cert = zcertstore_lookup(certstore_untrusted, public_key);
+    if(cert)
+        return;
+
+    int file_num;
+    char *trusted_filename;
+    char *untrusted_filename;
+    for(file_num = 1 ; file_num < 1000 ; file_num++){
+        trusted_filename = zsys_sprintf("%s/discovered_%03d.key", trusted_path, file_num);
+        untrusted_filename = zsys_sprintf("%s/discovered_%03d.key", untrusted_path, file_num);
+        if (!zsys_file_exists(trusted_filename) && !zsys_file_exists(untrusted_filename))
+            break;
+        zstr_free(&trusted_filename);
+        zstr_free(&untrusted_filename);
+    }
+    assert(untrusted_filename);
+
+    zsys_debug("gateway: Discovered public_key: %s, adding to %s", public_key, untrusted_filename);
+    cert = zcert_new_from_txt(public_key, "");
+    zcert_save_public(cert, untrusted_filename);
+    zstr_free(&trusted_filename);
+    zstr_free(&untrusted_filename);
+}
+
 static void 
 gateway_actor (zsock_t *pipe, void *args)
 {
     const char *endpoint = getenv("ZYRE_BIND");
     const char *private_key_path = getenv("PRIVATE_KEY_PATH");
     const char *public_key_dir_path = getenv("PUBLIC_KEY_DIR_PATH");
+    const char *untrusted_public_key_dir_path = getenv("UNTRUSTED_PUBLIC_KEY_DIR_PATH");
 
     const char *pubsub_endpoint = getenv("PUBSUB_ENDPOINT");
     const char *control_endpoint = getenv("CONTROL_ENDPOINT");
@@ -72,9 +109,16 @@ gateway_actor (zsock_t *pipe, void *args)
         control_endpoint = "tcp://127.0.0.1:14001";
     if(!public_key_dir_path)
         public_key_dir_path = "./public_keys";
+    if(!untrusted_public_key_dir_path)
+        untrusted_public_key_dir_path = "./public_keys_untrusted";
 
+    assert(!zsys_dir_create(public_key_dir_path));
+    assert(!zsys_dir_create(untrusted_public_key_dir_path));
 
     zcertstore_t *certstore = zcertstore_new(public_key_dir_path);
+    assert(certstore);
+
+    zcertstore_t *certstore_untrusted = zcertstore_new(public_key_dir_path);
     assert(certstore);
 
     zsock_t *pub = zsock_new(ZMQ_PUB);
@@ -185,6 +229,7 @@ gateway_actor (zsock_t *pipe, void *args)
             zsys_debug("Discovered data: key='%s' value='%s'", key, value);
             if(strneq(endpoint, key) && strneq(uuid, value)) {
                 zyre_require_peer (node, value, key);
+                maybe_create_untrusted_key(certstore, certstore_untrusted, public_key_dir_path, untrusted_public_key_dir_path, zsys_public_key_from_endpoint(key));
             }
             free (key);
             free (value);

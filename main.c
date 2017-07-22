@@ -9,12 +9,14 @@ void usage(char *cmd)
     fprintf(stderr, "    %s keygen\n", cmd);
     fprintf(stderr, "    %s disco tcp://*:9999\n\n", cmd);
     fprintf(stderr, "Environment Variables and their defaults:\n"
+        "UNTRUSTED_PUBLIC_KEY_DIR_PATH  ./public_keys_untrusted path to directory to store new public keys\n"
         "PRIVATE_KEY_PATH     client.key_secret     path to private key\n"
         "PUBLIC_KEY_DIR_PATH  ./public_keys         path to directory containing public keys\n"
         "ZYRE_BIND            tcp://*:5670          the endpoint that the zyre p2p socket should bind to\n"
         "DISABLE_CURVE        unset                 set to disable curve encryption for sockets\n"
         "PUBSUB_ENDPOINT      tcp://127.0.0.1:14000 the endpoint that the gateway should bind to for pubsub\n" 
         "CONTROL_ENDPOINT     tcp://127.0.0.1:14001 the endpoint that the gateway should bind to for control\n"
+
     );
 }
 
