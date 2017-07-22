@@ -21,7 +21,7 @@ void usage(char *cmd)
 int
 main (int argc, char *argv [])
 {
-
+    zsys_init();
     if (argc < 2) {
         usage(argv[0]);
         exit (1);
