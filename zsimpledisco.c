@@ -536,8 +536,11 @@ s_self_handle_pipe (self_t *self)
     else
     if (streq (command, "BIND")) {
         char *endpoint = zstr_recv (self->pipe);
-        if(s_self_bind(self, endpoint))
+        if(s_self_bind(self, endpoint)) {
             zsys_error ("could not bind to %s", endpoint);
+            self->terminated = true;
+            assert(false);//FIXME: right way to signal fatal error from inside an actor?
+        }
         zstr_free(&endpoint);
     }
     else
@@ -602,7 +605,6 @@ zsimpledisco_actor (zsock_t *pipe, void *args)
         zsock_t *which = (zsock_t *) zpoller_wait (poller, 1000);
         if(which == self->pipe) {
             s_self_handle_pipe (self);
-            zpoller_add (poller, self->server_socket);
         }
         if(which == self->server_socket) {
             s_self_handle_server_socket(self);
