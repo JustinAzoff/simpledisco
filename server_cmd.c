@@ -22,8 +22,10 @@ int server_cmd(char *bind_endpoint)
     }
 
     if(!disable_curve) {
-        if(keygen_cmd(private_key_path))
+        if(keygen_cmd(private_key_path)) {
+            zsimpledisco_destroy(&disco);
             return 1;
+        }
         zsys_info("zsimpledisco: Enabling curve crypto. Disable using DISABLE_CURVE=1");
         zsimpledisco_set_certstore_path(disco, certstore_path);
         zsimpledisco_set_private_key_path(disco, private_key_path);
