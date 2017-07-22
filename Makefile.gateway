@@ -3,6 +3,6 @@ CFLAGS=-Wall -Wextra $(shell pkg-config --cflags libzyre)
 LOADLIBES= $(shell pkg-config --libs libzyre)
 gateway: main.o keygen_cmd.o server_cmd.o gateway.o zsimpledisco.o
 
-gateway.static: main.c gateway.c server.c zsimpledisco.c keygen_cmd.c
-	cc  main.c gateway.c keygen_cmd.c zsimpledisco.c -o gateway -static-libstdc++  -static -static-libgcc -Wall -Wextra $(shell pkg-config --cflags --libs libzyre) -lpthread -lstdc++  -lm
+gateway.static: main.c gateway.c server_cmd.c zsimpledisco.c keygen_cmd.c
+	cc  main.c gateway.c keygen_cmd.c server_cmd.c zsimpledisco.c -o gateway -static-libstdc++  -static -static-libgcc -Wall -Wextra $(shell pkg-config --cflags --libs libzyre) -lpthread -lstdc++  -lm
 	@echo OK!
