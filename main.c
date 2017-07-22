@@ -18,6 +18,7 @@ void usage(char *cmd)
         "CONTROL_ENDPOINT     tcp://127.0.0.1:14001 the endpoint that the gateway should bind to for control\n"
 
     );
+    exit (1);
 }
 
 int
@@ -26,7 +27,6 @@ main (int argc, char *argv [])
     zsys_init();
     if (argc < 2) {
         usage(argv[0]);
-        exit (1);
     }
 
     const char *private_key_path = getenv("PRIVATE_KEY_PATH");
@@ -35,8 +35,16 @@ main (int argc, char *argv [])
         zsys_info("PRIVATE_KEY_PATH defaulted to '%s'", private_key_path);
     }
 
+    if (!zsys_file_exists(private_key_path)) {
+        keygen_cmd(private_key_path);
+    }
+
     if (argc == 2 && streq(argv[1], "keygen")) {
         exit(keygen_cmd(private_key_path));
+    }
+
+    if (argc == 2 && streq(argv[1], "disco")) {
+        usage(argv[0]);
     }
     if (argc == 3 && streq(argv[1], "disco")) {
         exit(server_cmd(argv[2]));
