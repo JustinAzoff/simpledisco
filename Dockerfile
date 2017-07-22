@@ -41,5 +41,5 @@ RUN sudo ldconfig
 RUN mkdir /home/zmq/simpledisco
 WORKDIR /home/zmq/simpledisco
 COPY . .
-RUN make && make -f Makefile.chat gateway.static
-RUN ls -l client server chat gateway
+RUN make && make -f Makefile.gateway gateway.static
+RUN ls -l client server gateway
