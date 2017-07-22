@@ -3,3 +3,6 @@ client
 server
 *.o
 gateway
+public_keys
+client.key
+client.key_secret
