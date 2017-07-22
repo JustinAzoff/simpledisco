@@ -40,11 +40,5 @@ main (int argc, char *argv [])
         exit(server_cmd(argv[2]));
     }
 
-    char *disco_server = getenv("DISCO_SERVER");
-    if(!disco_server) {
-        fprintf(stderr, "Missing DISCO_SERVER env var:\nexport DISCO_SERVER=tcp://localhost:9100\n");
-        exit(1);
-    }
-
     return gateway_cmd(argv[1]);
 }

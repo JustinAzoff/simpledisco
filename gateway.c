@@ -26,10 +26,37 @@
 #include "zyre.h"
 #include "zsimpledisco.h"
 
+void
+bootstrap_simpledisco(zsimpledisco_t *disco, zcertstore_t *certstore)
+{
+
+    zlistx_t *certs = zcertstore_certs(certstore);
+    zcert_t *cert = (zcert_t *) zlistx_first(certs);
+    int cert_count = 0;
+    int endpoint_count = 0;
+    while (cert) {
+        const char *endpoint = zcert_meta (cert, "simpledisco-endpoint");
+        const char *public_key = zcert_public_txt(cert);
+        if(endpoint) {
+            char *real_endpoint = zsys_sprintf("%s|%s", endpoint, public_key);
+            zsys_info("gateway: Connecting to simpledisco server @ %s using %s\n", endpoint, public_key);
+            zsimpledisco_connect(disco, real_endpoint);
+            zstr_free(&real_endpoint);
+            endpoint_count++;
+        }
+        cert = (zcert_t *) zlistx_next(certs);
+        cert_count++;
+    }
+
+    if(cert_count==0)
+        zsys_error("gateway: No certs found in certstore");
+    else if(endpoint_count==0)
+        zsys_error("gateway: No certs found in certstore that contain simpledisco-endpoint metadata");
+    zlistx_destroy(&certs);
+}
 static void 
 gateway_actor (zsock_t *pipe, void *args)
 {
-    const char *disco_server = getenv("DISCO_SERVER");
     const char *endpoint = getenv("ZYRE_BIND");
     const char *private_key_path = getenv("PRIVATE_KEY_PATH");
     const char *public_key_dir_path = getenv("PUBLIC_KEY_DIR_PATH");
@@ -37,12 +64,18 @@ gateway_actor (zsock_t *pipe, void *args)
     const char *pubsub_endpoint = getenv("PUBSUB_ENDPOINT");
     const char *control_endpoint = getenv("CONTROL_ENDPOINT");
 
+    if(!endpoint)
+        endpoint = "tcp://*:5670";
     if(!pubsub_endpoint)
         pubsub_endpoint = "tcp://127.0.0.1:14000";
     if(!control_endpoint)
         control_endpoint = "tcp://127.0.0.1:14001";
     if(!public_key_dir_path)
         public_key_dir_path = "./public_keys";
+
+
+    zcertstore_t *certstore = zcertstore_new(public_key_dir_path);
+    assert(certstore);
 
     zsock_t *pub = zsock_new(ZMQ_PUB);
     zsock_t *control = zsock_new(ZMQ_ROUTER);
@@ -55,17 +88,6 @@ gateway_actor (zsock_t *pipe, void *args)
     if (-1 == zsock_bind(control, "%s", control_endpoint)) {
         fprintf(stderr, "Faild to bind to CONTROL_ENDPOINT %s", control_endpoint);
         perror(" ");
-        exit(1);
-    }
-
-
-    if(!disco_server) {
-        fprintf(stderr, "export DISCO_SERVER=tcp://localhost:9100\n");
-        exit(1);
-    }
-
-    if(!endpoint) {
-        fprintf(stderr, "export ZYRE_BIND=tcp://*:9200\n");
         exit(1);
     }
 
@@ -84,7 +106,7 @@ gateway_actor (zsock_t *pipe, void *args)
         zsock_wait(auth);
     }
 
-    zsimpledisco_connect(disco, disco_server);
+    bootstrap_simpledisco(disco, certstore);
 
     zyre_t *node = zyre_new ((char *) args);
     if (!node)
