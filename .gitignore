@@ -2,3 +2,4 @@ chat
 client
 server
 *.o
+gateway
