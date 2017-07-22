@@ -26,6 +26,13 @@
 #include "zyre.h"
 #include "zsimpledisco.h"
 
+const char *getenv_with_default(const char *key, const char *def)
+{
+    const char *val = getenv(key);
+    return val ? val : def;
+}
+
+
 void
 bootstrap_simpledisco(zsimpledisco_t *disco, zcertstore_t *certstore)
 {
@@ -93,26 +100,21 @@ maybe_create_untrusted_key(
 static void 
 gateway_actor (zsock_t *pipe, void *args)
 {
-    const char *endpoint = getenv("ZYRE_BIND");
-    const char *private_key_path = getenv("PRIVATE_KEY_PATH");
-    const char *public_key_dir_path = getenv("PUBLIC_KEY_DIR_PATH");
-    const char *untrusted_public_key_dir_path = getenv("UNTRUSTED_PUBLIC_KEY_DIR_PATH");
+    const char *endpoint = getenv_with_default(
+        "ZYRE_BIND", "tcp://*:5670");
 
-    const char *pubsub_endpoint = getenv("PUBSUB_ENDPOINT");
-    const char *control_endpoint = getenv("CONTROL_ENDPOINT");
+    const char *pubsub_endpoint = getenv_with_default(
+        "PUBSUB_ENDPOINT", "tcp://127.0.0.1:14000");
+    const char *control_endpoint = getenv_with_default(
+        "CONTROL_ENDPOINT", "tcp://127.0.0.1:14001");
 
-    if(!endpoint)
-        endpoint = "tcp://*:5670";
-    if(!private_key_path)
-        private_key_path = "client.key_secret";
-    if(!pubsub_endpoint)
-        pubsub_endpoint = "tcp://127.0.0.1:14000";
-    if(!control_endpoint)
-        control_endpoint = "tcp://127.0.0.1:14001";
-    if(!public_key_dir_path)
-        public_key_dir_path = "./public_keys";
-    if(!untrusted_public_key_dir_path)
-        untrusted_public_key_dir_path = "./public_keys_untrusted";
+    const char *private_key_path = getenv_with_default(
+        "PRIVATE_KEY_PATH", "client.key_secret");
+    const char *public_key_dir_path = getenv_with_default(
+        "PUBLIC_KEY_DIR_PATH", "./public_keys");
+    const char *untrusted_public_key_dir_path = getenv_with_default(
+        "UNTRUSTED_PUBLIC_KEY_DIR_PATH", "./public_keys_untrusted");
+
 
     assert(!zsys_dir_create(public_key_dir_path));
     assert(!zsys_dir_create(untrusted_public_key_dir_path));
