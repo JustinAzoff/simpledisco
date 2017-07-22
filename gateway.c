@@ -103,6 +103,8 @@ gateway_actor (zsock_t *pipe, void *args)
 
     if(!endpoint)
         endpoint = "tcp://*:5670";
+    if(!private_key_path)
+        private_key_path = "client.key_secret";
     if(!pubsub_endpoint)
         pubsub_endpoint = "tcp://127.0.0.1:14000";
     if(!control_endpoint)
