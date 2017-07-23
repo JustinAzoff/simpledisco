@@ -333,7 +333,7 @@ zsimpledisco_merge_hash(zhash_t *dest, zhash_t *src)
     void *val;
     for (val = zhash_first (src); val != NULL; val = zhash_next (src)) {
         const char *key = zhash_cursor (src);
-        zsys_debug("zsimpledisco: Adding %s to new merged hash", key);
+        //zsys_debug("zsimpledisco: Adding %s to new merged hash", key);
         zhash_update (dest, key, val);
     }
 }
@@ -352,7 +352,7 @@ s_self_client_get_values(self_t *self, zhash_t *merged)
         zframe_t *data = zframe_recv_with_timeout(sock, 2000);
         if(data) {
             zhash_t *h = zhash_unpack(data);
-            zsys_debug("zsimpledisco: Got response from %s", endpoint);
+            //zsys_debug("zsimpledisco: Got response from %s", endpoint);
             zsimpledisco_merge_hash(merged, h);
             zhash_destroy(&h);
             zframe_destroy(&data);
