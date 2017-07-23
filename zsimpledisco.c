@@ -225,7 +225,7 @@ s_self_connect(self_t *self, const char *endpoint)
     zsock_t * sock =  zsock_new (ZMQ_DEALER);
 
     if(self->private_key && public_key) {
-        zsys_debug("zsimpledisco: Connecting to endpoint %s with public key %s", endpoint, public_key);
+        //zsys_debug("zsimpledisco: Connecting to endpoint %s with public key %s", endpoint_copy, public_key);
         zcert_apply (self->private_key, sock);
         zsock_set_curve_serverkey (sock, public_key);
     }
@@ -321,7 +321,7 @@ s_self_client_publish_all(self_t *self)
             //TODO: this should do scatter/gather kind of thing
             char *response = zstr_recv_with_timeout(sock, 1000);
             if(response) {
-                zsys_debug("zsimpledisco: Got response from %s: %s", endpoint, response);
+                //zsys_debug("zsimpledisco: Got response from %s: %s", endpoint, response);
                 zstr_free(&response);
             } else {
                 zsys_debug("zsimpledisco: no response from %s", endpoint);
