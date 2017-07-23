@@ -440,8 +440,7 @@ s_self_handle_server_socket (self_t *self)
     const char *peer_address = zframe_meta(command_frame, "Peer-Address");
     if(self->certstore) {
         const char *peer_public_key = zframe_meta(command_frame, "User-Id");
-        zsys_debug("zsimpledisco: Peer key is %s", peer_public_key);
-        if(0 /*FIXME*/ && !zcertstore_lookup(self->certstore, peer_public_key)) {
+        if(!zcertstore_lookup(self->certstore, peer_public_key)) {
             zsys_info("zsimpledisco: Peer key %s no longer in certstore, ignoring.", peer_public_key);
             goto out;
         }
