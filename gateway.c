@@ -262,6 +262,7 @@ gateway_actor (zsock_t *pipe, void *args)
                 free(str);
             }
             zframe_destroy(&routing_id);
+            zstr_free(&command);
             zmsg_destroy(&msg);
         }
 
