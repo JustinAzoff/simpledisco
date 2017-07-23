@@ -184,9 +184,9 @@ s_self_new (zsock_t *pipe)
     self->pipe = pipe;
 
     self->server_socket = zsock_new (ZMQ_ROUTER);
-    self->deliver_inteval = 30;
-    self->cleanup_interval = 5;
-    self->cleanup_max_age = 60;
+    self->deliver_inteval = 30 * 1000;
+    self->cleanup_interval = 5 * 1000;
+    self->cleanup_max_age = 60 * 1000;
     self->send_interval = self->cleanup_max_age - 2 * self->cleanup_interval;
 
     self->data = zhash_new();
@@ -198,6 +198,16 @@ s_self_new (zsock_t *pipe)
 
 
 // Client Stuff
+
+static void
+s_self_refresh_data(self_t *self)
+{
+    // Send new values immediately
+    self->last_send = 0;
+
+    // Deliver 2 seconds later
+    self->last_deliver = zclock_mono() - self->deliver_inteval + 2000 ;
+}
 
 static int
 s_self_connect(self_t *self, const char *endpoint)
@@ -238,8 +248,7 @@ s_self_connect_initial(self_t *self, const char *endpoint)
         return 0;
     int ret =  s_self_connect(self, endpoint);
 
-    self->last_deliver = 0;
-    self->last_send = 0;
+    s_self_refresh_data(self);
     return ret;
 }
 
@@ -284,7 +293,7 @@ s_self_client_publish(self_t *self, char *key, char *value)
         //TODO: this should do scatter/gather kind of thing
         char *response = zstr_recv_with_timeout(sock, 2000);
         if(response) {
-            zsys_debug("zsimpledisco: Got response from %s: %s", endpoint, response);
+            //zsys_debug("zsimpledisco: Got response from %s: %s", endpoint, response);
             zstr_free(&response);
         } else {
             zsys_debug("zsimpledisco: no response from %s", endpoint);
@@ -490,7 +499,7 @@ s_self_handle_expire_data(self_t *self)
 
     value_t *item;
     int64_t now = zclock_mono();
-    int64_t expiration_cuttoff = now - (1000 * self->cleanup_max_age);
+    int64_t expiration_cuttoff = now - self->cleanup_max_age;
     for (item = zhash_first (self->data); item != NULL; item = zhash_next (self->data)) {
         const char *key = zhash_cursor (self->data);
         if(item->ts < expiration_cuttoff) {
@@ -626,16 +635,16 @@ zsimpledisco_actor (zsock_t *pipe, void *args)
         if(zpoller_expired(poller)) {
             //zsys_debug ("zsimpledisco: Idle");
         }
-        if(zclock_mono() - self->last_deliver > self->deliver_inteval*1000) {
+        if(zclock_mono() - self->last_deliver > self->deliver_inteval) {
             s_self_deliver_all(self);
             self->last_deliver = zclock_mono();
         }
 
-        if(zclock_mono() - self->last_cleanup > self->cleanup_interval*1000) {
+        if(zclock_mono() - self->last_cleanup > self->cleanup_interval) {
             s_self_handle_cleanup(self);
             self->last_cleanup = zclock_mono();
         }
-        if(zclock_mono() - self->last_send > self->send_interval*1000) {
+        if(zclock_mono() - self->last_send > self->send_interval) {
             s_self_client_publish_all(self);
             self->last_send = zclock_mono();
         }
