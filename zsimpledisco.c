@@ -237,7 +237,9 @@ s_self_connect_initial(self_t *self, const char *endpoint)
     if(val)
         return 0;
     int ret =  s_self_connect(self, endpoint);
+
     self->last_deliver = 0;
+    self->last_send = 0;
     return ret;
 }
 
