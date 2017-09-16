@@ -17,13 +17,16 @@ typedef struct {
     int64_t last_cleanup;       //  Time records were last cleaned up
     int64_t last_send;          //  Time records were last sent
     int64_t last_deliver;       //  Time records were last delivered out of the actor
+    int64_t last_reconnect;     //  Time of last reconnect attempt
     int send_interval;          //  Interval to re-send data to the server
     int deliver_inteval;        //  Interval to deliver data
     int cleanup_interval;       //  Cleanup interval in seconds
     int cleanup_max_age;        //  Cleanup records older than this many seconds
+    int reconnect_interval;     //  Interval to reconnect to unreachable hosts
     zhash_t *data;              //  key/value data, on the server
     zhash_t *client_data;       //  key/value data, on the client
     zhash_t *client_sockets;    //  endpoint/socket mapping of client sockets
+    zlist_t *reconnect_queue;   //  List of endpoints to attempt to reconnect to
 
     zactor_t *auth;             //  zauth Actor, if curve enabled
     zcertstore_t *certstore;    //  certstore, for verififying connections
@@ -165,6 +168,7 @@ s_self_destroy (self_t **self_p)
         zhash_destroy(&self->data);
         zhash_destroy(&self->client_data);
         zhash_destroy(&self->client_sockets); //disconnect first?
+        zlist_destroy(&self->reconnect_queue);
         if(self->auth)
             zactor_destroy (&self->auth);
         if(self->certstore)
@@ -188,10 +192,12 @@ s_self_new (zsock_t *pipe)
     self->cleanup_interval = 5 * 1000;
     self->cleanup_max_age = 60 * 1000;
     self->send_interval = self->cleanup_max_age - 2 * self->cleanup_interval;
+    self->reconnect_interval = 90 * 1000;
 
     self->data = zhash_new();
     self->client_data = zhash_new();
     self->client_sockets = zhash_new();
+    self->reconnect_queue = zlist_new();
 
     return self;
 }
@@ -252,6 +258,27 @@ s_self_connect_initial(self_t *self, const char *endpoint)
     return ret;
 }
 
+static int
+s_self_client_reconnect_all(self_t *self)
+{
+    const char *endpoint = (const char *) zlist_first (self->reconnect_queue);
+    while (endpoint) {
+        zsys_debug ("zsimpledisco: reconnecting to %s!", endpoint);
+        s_self_connect(self, endpoint);
+        endpoint = (const char *) zlist_next (self->reconnect_queue);
+    }
+    zlist_purge(self->reconnect_queue);
+    return 0;
+}
+
+static int
+s_self_client_reconnect_later(self_t *self, const char *endpoint)
+{
+    zsys_debug ("zsimpledisco: reconnect to %s later", endpoint);
+    int ret = zlist_append(self->reconnect_queue, strdup(endpoint));
+    zhash_delete (self->client_sockets, endpoint);
+    return ret;
+}
 
 char *
 zstr_recv_with_timeout(zsock_t *sock, int timeout)
@@ -297,7 +324,7 @@ s_self_client_publish(self_t *self, char *key, char *value)
             zsys_debug("zsimpledisco: no response from %s", endpoint);
             if(zsock_is(sock))
                 zsock_destroy(&sock);
-            s_self_connect(self, endpoint);
+            s_self_client_reconnect_later(self, endpoint);
         }
     }
     return 0;
@@ -325,7 +352,7 @@ s_self_client_publish_all(self_t *self)
                 zsys_debug("zsimpledisco: no response from %s", endpoint);
                 if(zsock_is(sock))
                     zsock_destroy(&sock);
-                s_self_connect(self, endpoint);
+                s_self_client_reconnect_later(self, endpoint);
                 break;
             }
         }
@@ -367,7 +394,7 @@ s_self_client_get_values(self_t *self, zhash_t *merged)
             zsys_debug("zsimpledisco: no response from %s", endpoint);
             if(zsock_is(sock))
                 zsock_destroy(&sock);
-            s_self_connect(self, endpoint);
+            s_self_client_reconnect_later(self, endpoint);
         }
     }
     return 0;
@@ -645,6 +672,10 @@ zsimpledisco_actor (zsock_t *pipe, void *args)
         if(zclock_mono() - self->last_send > self->send_interval) {
             s_self_client_publish_all(self);
             self->last_send = zclock_mono();
+        }
+        if(zclock_mono() - self->last_reconnect > self->reconnect_interval) {
+            s_self_client_reconnect_all(self);
+            self->last_reconnect = zclock_mono();
         }
     }
     s_self_destroy(&self);
