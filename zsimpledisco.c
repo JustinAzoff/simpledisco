@@ -258,8 +258,7 @@ zstr_recv_with_timeout(zsock_t *sock, int timeout)
 {
     zpoller_t *poller = zpoller_new (NULL);
     zpoller_add (poller, sock);
-    zpoller_wait (poller, timeout);
-    if(zpoller_expired(poller)) {
+    if(!zpoller_wait (poller, timeout)) {
         zpoller_destroy(&poller);
         return NULL;
     }
@@ -271,8 +270,7 @@ zframe_recv_with_timeout(zsock_t *sock, int timeout)
 {
     zpoller_t *poller = zpoller_new (NULL);
     zpoller_add (poller, sock);
-    zpoller_wait (poller, timeout);
-    if(zpoller_expired(poller)) {
+    if(!zpoller_wait (poller, timeout)) {
         zpoller_destroy(&poller);
         return NULL;
     }
