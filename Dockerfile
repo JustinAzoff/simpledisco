@@ -29,7 +29,7 @@ RUN sudo make install
 RUN sudo ldconfig
 
 WORKDIR /home/zmq
-RUN git clone --quiet git://github.com/zeromq/zyre.git zyre
+RUN git clone --quiet --branch feat/require_peer git://github.com/JustinAzoff/zyre.git zyre
 WORKDIR /home/zmq/zyre
 RUN ./autogen.sh 2> /dev/null
 RUN ./configure --quiet --without-docs
