@@ -32,6 +32,17 @@ const char *getenv_with_default(const char *key, const char *def)
     return val ? val : def;
 }
 
+char *
+public_key_from_endpoint(char *endpoint)
+{
+    char *pipe = strchr(endpoint, '|');
+    char *public_key = NULL;
+    if(pipe != NULL) {
+        *pipe = '\0';
+        public_key = pipe+1;
+    }
+    return public_key;
+}
 
 void
 bootstrap_simpledisco(zsimpledisco_t *disco, zcertstore_t *certstore)
@@ -164,11 +175,11 @@ gateway_actor (zsock_t *pipe, void *args)
     //I should be able to start the node after the setup, but that isn't working
     //because self->inbox gets hosed somehow
     zyre_set_verbose (node);
-    zyre_start (node);
     zclock_sleep(1000);
     if(cert) {
-        zyre_set_curve_keypair(node, zcert_public_txt(cert), zcert_secret_txt(cert));
+        zyre_set_zcert(node, cert);
     }
+    zyre_start (node);
     zyre_set_endpoint(node, "%s", endpoint);
     const char *uuid = zyre_uuid (node);
     printf("My uuid is %s\n", uuid);
@@ -227,15 +238,16 @@ gateway_actor (zsock_t *pipe, void *args)
         else
         if (which == zsimpledisco_socket (disco)) {
             zmsg_t *msg = zmsg_recv (which);
-            char *key = zmsg_popstr (msg);
-            char *value = zmsg_popstr (msg);
-            zsys_debug("Discovered data: key='%s' value='%s'", key, value);
-            if(strneq(endpoint, key) && strneq(uuid, value)) {
-                zyre_require_peer (node, value, key);
-                maybe_create_untrusted_key(certstore, certstore_untrusted, public_key_dir_path, untrusted_public_key_dir_path, zsys_public_key_from_endpoint(key));
+            char *new_endpoint = zmsg_popstr (msg);
+            char *new_uuid = zmsg_popstr (msg);
+            zsys_debug("Discovered peer: uuid='%s' endpoint='%s'", new_uuid, new_endpoint);
+            char *public_key = public_key_from_endpoint(new_endpoint);
+            if(strneq(endpoint, new_endpoint) && strneq(uuid, new_uuid)) {
+                zyre_require_peer (node, new_uuid, new_endpoint, public_key);
+                maybe_create_untrusted_key(certstore, certstore_untrusted, public_key_dir_path, untrusted_public_key_dir_path, public_key);
             }
-            free (key);
-            free (value);
+            free (new_endpoint);
+            free (new_uuid);
             zmsg_destroy (&msg);
         }
         else
