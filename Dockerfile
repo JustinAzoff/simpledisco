@@ -20,7 +20,7 @@ RUN sudo make install
 RUN sudo ldconfig
 
 WORKDIR /home/zmq
-RUN git clone --quiet --branch feat/curve git://github.com/wesyoung/czmq.git czmq
+RUN git clone --quiet git://github.com/zeromq/czmq.git czmq
 WORKDIR /home/zmq/czmq
 RUN ./autogen.sh 2> /dev/null
 RUN ./configure --quiet --without-docs
@@ -29,9 +29,8 @@ RUN sudo make install
 RUN sudo ldconfig
 
 WORKDIR /home/zmq
-RUN git clone --quiet --branch curve_merges git://github.com/JustinAzoff/zyre.git zyre
+RUN git clone --quiet git://github.com/zeromq/zyre.git zyre
 WORKDIR /home/zmq/zyre
-RUN git pull #2017-07-17 -- 5
 RUN ./autogen.sh 2> /dev/null
 RUN ./configure --quiet --without-docs
 RUN make
