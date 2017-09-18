@@ -216,9 +216,22 @@ s_self_refresh_data(self_t *self)
     self->last_deliver = zclock_mono() - self->deliver_inteval + 2000 ;
 }
 
+// Callback for removing items from the client_sockets hash
+static void
+s_zsocket_free(void *argument)
+{
+    zsock_t *socket = (zsock_t *) argument;
+    zsock_destroy(&socket);
+}
+
 static int
 s_self_connect(self_t *self, const char *endpoint)
 {
+    // Ignore if we already have a connection for this endpoint
+    // Unifying inital connections and reconnections will make this not needed.
+    void *val = zhash_lookup(self->client_sockets, endpoint);
+    if (val)
+        return 0;
     zsys_debug("zsimpledisco: Client wants to connect to %s", endpoint);
 
     char *public_key = NULL;
@@ -243,6 +256,7 @@ s_self_connect(self_t *self, const char *endpoint)
     }
 
     zhash_update (self->client_sockets, endpoint, sock);
+    zhash_freefn (self->client_sockets, endpoint, s_zsocket_free);
     free(endpoint_copy);
     return 0;
 }
@@ -323,8 +337,6 @@ s_self_client_publish(self_t *self, char *key, char *value)
             zstr_free(&response);
         } else {
             zsys_debug("zsimpledisco: no response from %s", endpoint);
-            if(zsock_is(sock))
-                zsock_destroy(&sock);
             s_self_client_reconnect_later(self, endpoint);
         }
     }
@@ -351,8 +363,6 @@ s_self_client_publish_all(self_t *self)
                 zstr_free(&response);
             } else {
                 zsys_debug("zsimpledisco: no response from %s", endpoint);
-                if(zsock_is(sock))
-                    zsock_destroy(&sock);
                 s_self_client_reconnect_later(self, endpoint);
                 break;
             }
@@ -393,8 +403,6 @@ s_self_client_get_values(self_t *self, zhash_t *merged)
             zframe_destroy(&data);
         } else {
             zsys_debug("zsimpledisco: no response from %s", endpoint);
-            if(zsock_is(sock))
-                zsock_destroy(&sock);
             s_self_client_reconnect_later(self, endpoint);
         }
     }
