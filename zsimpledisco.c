@@ -198,6 +198,7 @@ s_self_new (zsock_t *pipe)
     self->client_data = zhash_new();
     self->client_sockets = zhash_new();
     self->reconnect_queue = zlist_new();
+    zlist_autofree(self->reconnect_queue);
 
     return self;
 }
@@ -275,7 +276,7 @@ static int
 s_self_client_reconnect_later(self_t *self, const char *endpoint)
 {
     zsys_debug ("zsimpledisco: reconnect to %s later", endpoint);
-    int ret = zlist_append(self->reconnect_queue, strdup(endpoint));
+    int ret = zlist_append(self->reconnect_queue, (void *)endpoint);
     zhash_delete (self->client_sockets, endpoint);
     return ret;
 }
