@@ -702,5 +702,6 @@ zsimpledisco_actor (zsock_t *pipe, void *args)
             self->last_reconnect = zclock_mono();
         }
     }
+    alarm(0);
     s_self_destroy(&self);
 }
