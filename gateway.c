@@ -112,6 +112,7 @@ static void
 gateway_actor (zsock_t *pipe, void *args)
 {
     int64_t last_bootstrap = 0;
+    int64_t last_zyre_dump = 0;
 
     const char *endpoint = getenv_with_default(
         "ZYRE_BIND", "tcp://*:5670");
@@ -174,7 +175,7 @@ gateway_actor (zsock_t *pipe, void *args)
     //FIXME: The order of the next few lines matters a lot for some reason
     //I should be able to start the node after the setup, but that isn't working
     //because self->inbox gets hosed somehow
-    zyre_set_verbose (node);
+    //zyre_set_verbose (node);
     zclock_sleep(1000);
     if(cert) {
         zyre_set_zcert(node, cert);
@@ -281,6 +282,10 @@ gateway_actor (zsock_t *pipe, void *args)
         if(zclock_mono() - last_bootstrap > 30*1000) {
             bootstrap_simpledisco(disco, certstore);
             last_bootstrap = zclock_mono();
+        }
+        if(zclock_mono() - last_zyre_dump > 60*1000) {
+            zyre_print(node);
+            last_zyre_dump = zclock_mono();
         }
 
 
