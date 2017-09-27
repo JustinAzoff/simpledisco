@@ -138,7 +138,7 @@ zsimpledisco_dump_hash(zhash_t *h)
     int64_t now = zclock_mono();
     for (val = zhash_first (h); val != NULL; val = zhash_next (h)) {
         const char *key = zhash_cursor (h);
-        zsys_debug("zsimpledisco: key='%s' value='%s' ts='%ld' age='%ld'", key, val->value, val->ts, (now-val->ts) / 1000);
+        zsys_info("zsimpledisco: key='%s' value='%s' ts='%ld' age='%ld'", key, val->value, val->ts, (now-val->ts) / 1000);
     }
     return 0;
 }
@@ -232,7 +232,8 @@ s_self_connect(self_t *self, const char *endpoint)
     void *val = zhash_lookup(self->client_sockets, endpoint);
     if (val)
         return 0;
-    zsys_debug("zsimpledisco: Client wants to connect to %s", endpoint);
+    if (self->verbose)
+        zsys_debug("zsimpledisco: Client wants to connect to %s", endpoint);
 
     char *public_key = NULL;
     char *endpoint_copy = strdup(endpoint);
@@ -278,7 +279,8 @@ s_self_client_reconnect_all(self_t *self)
 {
     const char *endpoint = (const char *) zlist_first (self->reconnect_queue);
     while (endpoint) {
-        zsys_debug ("zsimpledisco: reconnecting to %s!", endpoint);
+        if (self->verbose)
+            zsys_debug ("zsimpledisco: reconnecting to %s!", endpoint);
         s_self_connect(self, endpoint);
         endpoint = (const char *) zlist_next (self->reconnect_queue);
     }
@@ -289,7 +291,8 @@ s_self_client_reconnect_all(self_t *self)
 static int
 s_self_client_reconnect_later(self_t *self, const char *endpoint)
 {
-    zsys_debug ("zsimpledisco: reconnect to %s later", endpoint);
+    if (self->verbose)
+        zsys_debug ("zsimpledisco: reconnect to %s later", endpoint);
     int ret = zlist_append(self->reconnect_queue, (void *)endpoint);
     zhash_delete (self->client_sockets, endpoint);
     return ret;
@@ -326,17 +329,19 @@ s_self_client_publish(self_t *self, char *key, char *value)
     zsock_t *sock;
     for (sock = zhash_first (self->client_sockets); sock != NULL; sock = zhash_next (self->client_sockets)) {
         const char *endpoint = zhash_cursor (self->client_sockets);
-        zsys_debug("zsimpledisco: PUBLISH %s => '%s' '%s'", endpoint, key, value);
+        if (self->verbose)
+            zsys_debug("zsimpledisco: PUBLISH %s => '%s' '%s'", endpoint, key, value);
         if(-1 == zstr_sendx(sock, "PUBLISH", key, value, NULL)) {
-            perror("zsimpledisco: send failed?");
+            if (self->verbose)
+                zsys_info("zsimpledisco: send to %s failed", endpoint);
         }
         //TODO: this should do scatter/gather kind of thing
         char *response = zstr_recv_with_timeout(sock, 2000);
         if(response) {
-            //zsys_debug("zsimpledisco: Got response from %s: %s", endpoint, response);
             zstr_free(&response);
         } else {
-            zsys_debug("zsimpledisco: no response from %s", endpoint);
+            if (self->verbose)
+                zsys_info("zsimpledisco: no response from %s", endpoint);
             s_self_client_reconnect_later(self, endpoint);
         }
     }
@@ -352,17 +357,19 @@ s_self_client_publish_all(self_t *self)
         const char *endpoint = zhash_cursor (self->client_sockets);
         for (value = zhash_first (self->client_data); value != NULL; value = zhash_next (self->client_data)) {
             const char *key = zhash_cursor (self->client_data);
-            zsys_debug("zsimpledisco: PUBLISH %s => '%s' '%s'", endpoint, key, value);
+            if (self->verbose)
+                zsys_debug("zsimpledisco: PUBLISH %s => '%s' '%s'", endpoint, key, value);
             if(-1 == zstr_sendx(sock, "PUBLISH", key, value, NULL)) {
-                perror("zsimpledisco: send failed?");
+                if (self->verbose)
+                    zsys_info("zsimpledisco: send to %s failed", endpoint);
             }
             //TODO: this should do scatter/gather kind of thing
             char *response = zstr_recv_with_timeout(sock, 1000);
             if(response) {
-                //zsys_debug("zsimpledisco: Got response from %s: %s", endpoint, response);
                 zstr_free(&response);
             } else {
-                zsys_debug("zsimpledisco: no response from %s", endpoint);
+                if (self->verbose)
+                    zsys_info("zsimpledisco: no response from %s", endpoint);
                 s_self_client_reconnect_later(self, endpoint);
                 break;
             }
@@ -389,20 +396,22 @@ s_self_client_get_values(self_t *self, zhash_t *merged)
     zsock_t *sock;
     for (sock = zhash_first (self->client_sockets); sock != NULL; sock = zhash_next (self->client_sockets)) {
         const char *endpoint = zhash_cursor (self->client_sockets);
-        zsys_debug("zsimpledisco: Send %s => 'VALUES'", endpoint);
+        if (self->verbose)
+            zsys_debug("zsimpledisco: Send %s => 'VALUES'", endpoint);
         if(-1 == zstr_send(sock, "VALUES")) {
-            perror("zsimpledisco: send failed?");
+            if (self->verbose)
+                zsys_info("zsimpledisco: send to %s failed", endpoint);
         }
         //TODO: this should do scatter/gather kind of thing
         zframe_t *data = zframe_recv_with_timeout(sock, 2000);
         if(data) {
             zhash_t *h = zhash_unpack(data);
-            //zsys_debug("zsimpledisco: Got response from %s", endpoint);
             zsimpledisco_merge_hash(merged, h);
             zhash_destroy(&h);
             zframe_destroy(&data);
         } else {
-            zsys_debug("zsimpledisco: no response from %s", endpoint);
+            if (self->verbose)
+                zsys_info("zsimpledisco: no response from %s", endpoint);
             s_self_client_reconnect_later(self, endpoint);
         }
     }
@@ -486,7 +495,8 @@ s_self_handle_server_socket (self_t *self)
     if(self->certstore) {
         const char *peer_public_key = zframe_meta(command_frame, "User-Id");
         if(!zcertstore_lookup(self->certstore, peer_public_key)) {
-            zsys_info("zsimpledisco: Peer key %s no longer in certstore, ignoring.", peer_public_key);
+            if (self->verbose)
+                zsys_info("zsimpledisco: Peer key %s no longer in certstore, ignoring.", peer_public_key);
             goto out;
         }
     }
@@ -498,17 +508,20 @@ s_self_handle_server_socket (self_t *self)
         char *value = zstr_recv(self->server_socket);
         if(key && strlen(key) > 8 && key[6] == '*') {
             char *new_key = zsys_sprintf("tcp://%s%s", peer_address, &key[7]);
-            zsys_debug("zsimpledisco: Rewrote %s to %s", key, new_key);
+            if (self->verbose)
+                zsys_debug("zsimpledisco: Rewrote %s to %s", key, new_key);
             zstr_free(&key);
             key = new_key;
         }
-        zsys_info ("zsimpledisco: server PUBLISH '%s' '%s'", key, value);
+        if (self->verbose)
+            zsys_info ("zsimpledisco: server PUBLISH '%s' '%s'", key, value);
         s_self_add_kv(self, key, value);
         zstr_free (&key);
         zstr_free (&value);
         zframe_send (&routing_id, self->server_socket, ZFRAME_MORE);
         if(-1 == zstr_send(self->server_socket, "OK")) {
-            perror("sending OK failed?");
+            if (self->verbose)
+                zsys_info("zsimpledisco: send failed");
         }
     }
     else
@@ -537,7 +550,8 @@ s_self_handle_expire_data(self_t *self)
     for (item = zhash_first (self->data); item != NULL; item = zhash_next (self->data)) {
         const char *key = zhash_cursor (self->data);
         if(item->ts < expiration_cuttoff) {
-            zsys_debug("zsimpledisco: expire key='%s' value='%s' ts='%ld' age='%ld'", key, item->value, item->ts, (now-item->ts) / 1000);
+            if (self->verbose)
+                zsys_debug("zsimpledisco: expire key='%s' value='%s' ts='%ld' age='%ld'", key, item->value, item->ts, (now-item->ts) / 1000);
             if(-1 == zlist_append(keys_to_delete, (void *)key)) {
                 zsys_error("zsimpledisco: zlist_append failed");
             }
