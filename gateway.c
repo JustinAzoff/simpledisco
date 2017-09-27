@@ -230,10 +230,10 @@ gateway_actor (zsock_t *pipe, void *args)
             }
             else
             if (streq (event, "ENTER"))
-                zsys_info("%s has joined the chat", name);
+                zsys_info("%s has joined the network", name);
             else
             if (streq (event, "EXIT"))
-                zsys_info("%s has left the chat", name);
+                zsys_info("%s has left the network", name);
 
             free (event);
             free (peer);
