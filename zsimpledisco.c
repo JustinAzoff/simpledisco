@@ -658,6 +658,7 @@ zsimpledisco_actor (zsock_t *pipe, void *args)
     zpoller_add (poller, self->server_socket);
 
     while (!self->terminated) {
+        alarm(120);
         zsock_t *which = (zsock_t *) zpoller_wait (poller, 1000);
         if(which == self->pipe) {
             s_self_handle_pipe (self);
