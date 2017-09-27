@@ -228,6 +228,12 @@ gateway_actor (zsock_t *pipe, void *args)
                 //zsys_debug("zyre->pub %s: %s: %s", group, name, message);
                 zstr_sendx (pub, group, name, message, NULL);
             }
+            else
+            if (streq (event, "ENTER"))
+                zsys_info("%s has joined the chat", name);
+            else
+            if (streq (event, "EXIT"))
+                zsys_info("%s has left the chat", name);
 
             free (event);
             free (peer);
