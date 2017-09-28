@@ -29,9 +29,9 @@ RUN sudo make install
 RUN sudo ldconfig
 
 WORKDIR /home/zmq
-RUN echo 2017-09-28
 RUN git clone --quiet git://github.com/zeromq/zyre.git zyre
 WORKDIR /home/zmq/zyre
+RUN git fetch && git checkout 8fa2340e4d30609ac2a420238c19d565d2ad07ba
 RUN ./autogen.sh 2> /dev/null
 RUN ./configure --quiet --without-docs
 RUN make
