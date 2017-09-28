@@ -23,6 +23,7 @@ typedef struct {
     int cleanup_interval;       //  Cleanup interval in seconds
     int cleanup_max_age;        //  Cleanup records older than this many seconds
     int reconnect_interval;     //  Interval to reconnect to unreachable hosts
+    int peer_timeout;           //  Timeout for peer socket.
     zhash_t *data;              //  key/value data, on the server
     zhash_t *client_data;       //  key/value data, on the client
     zhash_t *client_sockets;    //  endpoint/socket mapping of client sockets
@@ -193,6 +194,7 @@ s_self_new (zsock_t *pipe)
     self->cleanup_max_age = 60 * 1000;
     self->send_interval = self->cleanup_max_age - 2 * self->cleanup_interval;
     self->reconnect_interval = 90 * 1000;
+    self->peer_timeout = 2 * 1000;
 
     self->data = zhash_new();
     self->client_data = zhash_new();
@@ -244,6 +246,8 @@ s_self_connect(self_t *self, const char *endpoint)
     }
 
     zsock_t * sock =  zsock_new (ZMQ_DEALER);
+    zsock_set_sndtimeo(sock, self->peer_timeout);
+    zsock_set_rcvtimeo(sock, self->peer_timeout);
 
     if(self->private_key && public_key) {
         //zsys_debug("zsimpledisco: Connecting to endpoint %s with public key %s", endpoint_copy, public_key);
@@ -298,31 +302,6 @@ s_self_client_reconnect_later(self_t *self, const char *endpoint)
     return ret;
 }
 
-char *
-zstr_recv_with_timeout(zsock_t *sock, int timeout)
-{
-    zpoller_t *poller = zpoller_new (NULL);
-    zpoller_add (poller, sock);
-    if(!zpoller_wait (poller, timeout)) {
-        zpoller_destroy(&poller);
-        return NULL;
-    }
-    zpoller_destroy(&poller);
-    return zstr_recv(sock);
-}
-zframe_t *
-zframe_recv_with_timeout(zsock_t *sock, int timeout)
-{
-    zpoller_t *poller = zpoller_new (NULL);
-    zpoller_add (poller, sock);
-    if(!zpoller_wait (poller, timeout)) {
-        zpoller_destroy(&poller);
-        return NULL;
-    }
-    zpoller_destroy(&poller);
-    return zframe_recv(sock);
-}
-
 static int
 s_self_client_publish(self_t *self, char *key, char *value)
 {
@@ -336,7 +315,7 @@ s_self_client_publish(self_t *self, char *key, char *value)
                 zsys_info("zsimpledisco: send to %s failed", endpoint);
         }
         //TODO: this should do scatter/gather kind of thing
-        char *response = zstr_recv_with_timeout(sock, 2000);
+        char *response = zstr_recv(sock);
         if(response) {
             zstr_free(&response);
         } else {
@@ -364,7 +343,7 @@ s_self_client_publish_all(self_t *self)
                     zsys_info("zsimpledisco: send to %s failed", endpoint);
             }
             //TODO: this should do scatter/gather kind of thing
-            char *response = zstr_recv_with_timeout(sock, 1000);
+            char *response = zstr_recv(sock);
             if(response) {
                 zstr_free(&response);
             } else {
@@ -403,7 +382,7 @@ s_self_client_get_values(self_t *self, zhash_t *merged)
                 zsys_info("zsimpledisco: send to %s failed", endpoint);
         }
         //TODO: this should do scatter/gather kind of thing
-        zframe_t *data = zframe_recv_with_timeout(sock, 2000);
+        zframe_t *data = zframe_recv(sock);
         if(data) {
             zhash_t *h = zhash_unpack(data);
             zsimpledisco_merge_hash(merged, h);
