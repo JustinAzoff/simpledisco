@@ -19,7 +19,7 @@ typedef struct {
     int64_t last_deliver;       //  Time records were last delivered out of the actor
     int64_t last_reconnect;     //  Time of last reconnect attempt
     int send_interval;          //  Interval to re-send data to the server
-    int deliver_inteval;        //  Interval to deliver data
+    int deliver_interval;        //  Interval to deliver data
     int cleanup_interval;       //  Cleanup interval in seconds
     int cleanup_max_age;        //  Cleanup records older than this many seconds
     int reconnect_interval;     //  Interval to reconnect to unreachable hosts
@@ -189,7 +189,7 @@ s_self_new (zsock_t *pipe)
     self->pipe = pipe;
 
     self->server_socket = zsock_new (ZMQ_ROUTER);
-    self->deliver_inteval = 30 * 1000;
+    self->deliver_interval = 30 * 1000;
     self->cleanup_interval = 5 * 1000;
     self->cleanup_max_age = 60 * 1000;
     self->send_interval = self->cleanup_max_age - 2 * self->cleanup_interval;
@@ -215,7 +215,7 @@ s_self_refresh_data(self_t *self)
     self->last_send = 0;
 
     // Deliver 2 seconds later
-    self->last_deliver = zclock_mono() - self->deliver_inteval + 2000 ;
+    self->last_deliver = zclock_mono() - self->deliver_interval + 2000 ;
 }
 
 // Callback for removing items from the client_sockets hash
@@ -663,7 +663,7 @@ zsimpledisco_actor (zsock_t *pipe, void *args)
         if(zpoller_expired(poller)) {
             //zsys_debug ("zsimpledisco: Idle");
         }
-        if(zclock_mono() - self->last_deliver > self->deliver_inteval) {
+        if(zclock_mono() - self->last_deliver > self->deliver_interval) {
             s_self_deliver_all(self);
             self->last_deliver = zclock_mono();
         }
