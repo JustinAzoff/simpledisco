@@ -29,7 +29,7 @@ RUN sudo make install
 RUN sudo ldconfig
 
 WORKDIR /home/zmq
-RUN echo take-1
+RUN echo 2017-09-28
 RUN git clone --quiet git://github.com/zeromq/zyre.git zyre
 WORKDIR /home/zmq/zyre
 RUN ./autogen.sh 2> /dev/null
