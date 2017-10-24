@@ -5,7 +5,7 @@
 void usage(char *cmd)
 {
     fprintf(stderr, "Usage: \n");
-    fprintf(stderr, "    %s node_name\n", cmd);
+    fprintf(stderr, "    %s [node_name]\n", cmd);
     fprintf(stderr, "    %s keygen\n", cmd);
     fprintf(stderr, "    %s disco tcp://*:9999\n\n", cmd);
     fprintf(stderr, "Environment Variables and their defaults:\n"
@@ -25,9 +25,6 @@ int
 main (int argc, char *argv [])
 {
     zsys_init();
-    if (argc < 2) {
-        usage(argv[0]);
-    }
 
     const char *private_key_path = getenv("PRIVATE_KEY_PATH");
     if(!private_key_path) {
@@ -50,5 +47,13 @@ main (int argc, char *argv [])
         exit(server_cmd(argv[2]));
     }
 
-    return gateway_cmd(argv[1]);
+    char *hostname;
+    if (argc == 2) {
+        hostname = argv[1];
+    } else {
+        hostname = zsys_hostname();
+        zsys_info("hostname defaulted to '%s'", hostname);
+    }
+
+    return gateway_cmd(hostname);
 }
